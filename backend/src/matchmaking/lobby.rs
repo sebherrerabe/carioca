@@ -26,8 +26,8 @@ impl Lobby {
 
         queue.push_back(user_id);
 
-        // Carioca is usually 2-4 players. We will trigger matches at exactly 2 players for MVP.
-        let players_needed = 2;
+        // Carioca is usually 2-4 players. We will trigger matches at exactly 4 players.
+        let players_needed = 4;
 
         if queue.len() >= players_needed {
             let mut matched = Vec::with_capacity(players_needed);

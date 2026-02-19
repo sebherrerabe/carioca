@@ -229,4 +229,35 @@ mod tests {
         // Now it's Bob's turn
         assert_eq!(game.current_turn, 1);
     }
+
+    #[test]
+    fn test_4_player_initialization() {
+        let players = vec![
+            "p1".to_string(),
+            "p2".to_string(),
+            "p3".to_string(),
+            "p4".to_string(),
+        ];
+        let mut game = GameState::new(players);
+        game.start_round();
+
+        assert_eq!(game.players.len(), 4);
+
+        // Each player gets 12 cards -> 48 cards dealt
+        for i in 0..4 {
+            assert_eq!(game.players[i].hand.len(), 12);
+        }
+
+        // 1 card in discard pile
+        assert_eq!(game.discard_pile.len(), 1);
+
+        // Deck should have 108 - (12 * 4) - 1 = 59 cards remaining
+        assert_eq!(game.deck.remaining(), 59);
+
+        // Turn progression wraps after 4
+        assert_eq!(game.current_turn, 0);
+        assert!(game.draw_from_deck().is_ok());
+        assert!(game.discard(0).is_ok());
+        assert_eq!(game.current_turn, 1);
+    }
 }

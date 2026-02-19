@@ -4,17 +4,25 @@ use axum::{
 };
 use sqlx::{sqlite::SqlitePoolOptions, SqlitePool};
 use std::sync::Arc;
+use std::collections::HashMap;
 use tokio::net::TcpListener;
+use tokio::sync::Mutex;
 use tower_http::cors::CorsLayer;
 use tower_http::trace::TraceLayer;
 
 use crate::api::auth;
 use crate::api::ws;
 
+use crate::matchmaking::lobby::Lobby;
+use crate::matchmaking::room::{Room, RoomEvent};
+use tokio::sync::mpsc;
+
 #[derive(Clone)]
 pub struct AppState {
     pub db: SqlitePool,
-    // TODO: Add Matchmaking Lobby state
+    pub lobby: Lobby,
+    // Active rooms mapped by Room ID, storing the Sender channel to communicate with the Room Actor
+    pub active_rooms: Arc<Mutex<HashMap<String, mpsc::Sender<RoomEvent>>>>,
 }
 
 pub async fn start_server(db_url: &str) {
@@ -24,10 +32,13 @@ pub async fn start_server(db_url: &str) {
         .await
         .expect("Failed to connect to SQLite");
 
-    // Eventually run migrations here
+    // Run migrations/table creation
+    crate::db::repo::create_user_table(&pool).await.expect("Failed to create user table");
 
     let state = Arc::new(AppState {
         db: pool,
+        lobby: Lobby::new(),
+        active_rooms: Arc::new(Mutex::new(HashMap::new())),
     });
 
     let app = Router::new()

@@ -202,6 +202,99 @@ impl GameState {
         Ok(())
     }
 
+    pub fn reorder_hand(
+        &mut self,
+        player_id: &str,
+        new_hand: Vec<Card>,
+    ) -> Result<(), &'static str> {
+        let player = self
+            .players
+            .iter_mut()
+            .find(|p| p.id == player_id)
+            .ok_or("Player not found")?;
+
+        if player.hand.len() != new_hand.len() {
+            return Err("New hand length does not match current hand length");
+        }
+
+        // Verify that the new_hand contains exactly the same cards as the current hand
+        // A simple way is to check element by element. To handle duplicates (like two identical standard cards or two jokers),
+        // we can count or remove them from a clone.
+        let mut original_hand_copy = player.hand.clone();
+        for card in &new_hand {
+            let idx = original_hand_copy.iter().position(|c| c == card);
+            if let Some(i) = idx {
+                original_hand_copy.remove(i);
+            } else {
+                return Err("New hand contains an unknown card or extra duplicate");
+            }
+        }
+
+        // If we reach here, new_hand has exact same elements as hand, just reordered
+        player.hand = new_hand;
+        Ok(())
+    }
+
+    pub fn drop_hand(
+        &mut self,
+        player_id: &str,
+        combinations: Vec<Vec<Card>>,
+    ) -> Result<(), &'static str> {
+        if self.is_game_over {
+            return Err("Game is over");
+        }
+
+        let idx = self.current_turn;
+        let player = self.players.get_mut(idx).ok_or("Invalid turn")?;
+
+        if player.id != player_id {
+            return Err("Not your turn");
+        }
+
+        if player.has_dropped_hand {
+            return Err("Hand already dropped");
+        }
+
+        // Verify that the player actually has all these cards in their hand
+        let mut original_hand_copy = player.hand.clone();
+        for combo in &combinations {
+            for card in combo {
+                if let Some(i) = original_hand_copy.iter().position(|c| c == card) {
+                    original_hand_copy.remove(i);
+                } else {
+                    return Err("Combinations contain cards not in player's hand");
+                }
+            }
+        }
+
+        // Now mathematically validate the combinations against the round requirements.
+        let (req_trios, req_escalas) = self.current_round.get_requirements();
+
+        let mut found_trios = 0;
+        let mut found_escalas = 0;
+
+        for combo in &combinations {
+            if is_valid_trio(combo) {
+                found_trios += 1;
+            } else if is_valid_escala(combo) {
+                found_escalas += 1;
+            } else {
+                return Err("Invalid combination format submitted");
+            }
+        }
+
+        if found_trios != req_trios || found_escalas != req_escalas {
+            return Err("Combinations do not match the current round requirements");
+        }
+
+        // Success! Remove the evaluated cards from the real hand and store the bajada
+        player.hand = original_hand_copy;
+        player.has_dropped_hand = true;
+        player.dropped_combinations = combinations;
+
+        Ok(())
+    }
+
     pub fn end_round(&mut self) {
         // Calculate points
         for player in &mut self.players {
@@ -221,6 +314,118 @@ impl GameState {
             self.is_game_over = true;
         }
     }
+}
+
+// ---------------------------------------------
+// Validation Logic
+// ---------------------------------------------
+
+fn is_valid_trio(combo: &[Card]) -> bool {
+    if combo.len() < 3 {
+        return false;
+    }
+
+    let mut target_value = None;
+
+    for card in combo {
+        if let Card::Standard { value, .. } = card {
+            if let Some(tv) = target_value {
+                if *value != tv {
+                    return false; // Mismatched value in Trio
+                }
+            } else {
+                target_value = Some(*value);
+            }
+        }
+    }
+
+    // Jokers are always valid. If the combo was entirely jokers (target_value == None), that's technically valid too.
+    true
+}
+
+fn is_valid_escala(combo: &[Card]) -> bool {
+    if combo.len() < 4 {
+        return false;
+    }
+
+    let mut target_suit = None;
+
+    // First pass: identify the target suit
+    for card in combo {
+        if let Card::Standard { suit, .. } = card {
+            if let Some(ts) = target_suit {
+                if *suit != ts {
+                    return false; // Mismatched suit in Escala
+                }
+            } else {
+                target_suit = Some(*suit);
+            }
+        }
+    }
+
+    // Second pass: verify sequential ascending order.
+    // We expect values to increment by 1 each step.
+    let mut expected_value_int = None;
+
+    for card in combo {
+        match card {
+            Card::Standard { value, .. } => {
+                let val_int = *value as i32;
+                if let Some(exp) = expected_value_int {
+                    if val_int != exp {
+                        return false; // Out of sequence
+                    }
+                }
+                expected_value_int = Some(val_int + 1);
+            }
+            Card::Joker => {
+                // The joker takes the place of whatever the expected standard card was
+                if let Some(exp) = expected_value_int {
+                    expected_value_int = Some(exp + 1);
+                } else {
+                    // First card is a joker. We can't immediately deduce the sequence start.
+                    // This creates a small gap in simple validation where a leading joker isn't strongly bound
+                    // until we hit a standard card, which is computationally tricky.
+                    // For MVP simplicity, let's just accept leading jokers that bump the sequence implicitly when we find it.
+                    // Wait, if we just defer setting expected_value_int, how do we know if it was correct?
+                    // Let's implement a rigid backward inference:
+                    // Find the first Standard card, trace back to define what the first card MUST be.
+                }
+            }
+        }
+    }
+
+    // Rigid check for Escala:
+    // 1. Find the first Standard card to anchor the sequence.
+    let first_std_idx = combo.iter().position(|c| !c.is_joker());
+
+    if let Some(idx) = first_std_idx {
+        if let Card::Standard { value, .. } = &combo[idx] {
+            let anchor_val = *value as i32;
+            let mut expected_val = anchor_val - (idx as i32);
+
+            for card in combo {
+                match card {
+                    Card::Standard { value: cv, .. } => {
+                        if (*cv as i32) != expected_val {
+                            return false;
+                        }
+                    }
+                    Card::Joker => {
+                        // Takes the place of expected_val natively
+                    }
+                }
+                expected_val += 1;
+
+                // If sequence exceeds Ace (14), it's invalid unless bridging K-A-2 (which we ignore logic-wise for MVP)
+                if expected_val > 15 {
+                    return false;
+                }
+            }
+        }
+    }
+
+    true
 }
 
 #[cfg(test)]

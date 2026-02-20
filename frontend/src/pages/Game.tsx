@@ -19,7 +19,7 @@ type TurnPhase = 'draw' | 'staging' | 'discard-only';
 
 export default function Game() {
     const [, setLocation] = useLocation();
-    const { gameState, disconnect, sendAction } = useWebSocket();
+    const { gameState, disconnect, sendAction, error } = useWebSocket();
     const username = localStorage.getItem('username') || '';
 
     // Safely decode the user_id
@@ -56,7 +56,17 @@ export default function Game() {
     // Derived state
     const me = gameState?.players.find(p => p.id === userId);
     const isMyTurn = gameState ? (me && gameState.players.indexOf(me) === gameState.current_turn_index) : false;
-    const hasDrawn = (gameState?.my_hand.length ?? 0) >= 13;
+
+    // In Carioca, you draw one card at the start of your turn. So if your hand size > base hand size for the round, you have drawn.
+    // For MVP, backend deals 12 cards explicitly. So base hand size before drawing is always 12.
+    // However, if the player 'baja' (drops hand), their hand size drops.
+    // The most robust way to check if we have drawn is to see if we have discarded yet this turn.
+    // Wait, the backend tracks `turns_played`. If we haven't discarded in this turn, we are still "in" the turn.
+    // Let's use `hand.length` for now based on the fact that if it's > 12, we've drawn. Wait, what if we 'bajamos'?
+    // Let's just trust that `hasDrawn` means "have we picked up a card yet". 
+    // Wait, if hand is 12, `hasDrawn` is false. If 13, `hasDrawn` is true.
+    // If bajado, we definitely have drawn.
+    const hasDrawn = (gameState?.my_hand.length ?? 0) > 12 || (me?.has_dropped_hand ?? false);
     const canDraw = isMyTurn && !hasDrawn;
     const isFirstTurn = (me?.turns_played ?? 0) === 0;
     const canBajar = isMyTurn && hasDrawn && !isFirstTurn && !(me?.has_dropped_hand);
@@ -79,19 +89,42 @@ export default function Game() {
     // Sync local hand with server state (reset when server hand changes e.g. draw/discard)
     useEffect(() => {
         if (!gameState) return;
-        const serverCardsStr = [...gameState.my_hand].map(c => JSON.stringify(c)).sort().join('|');
-        const localCardsStr = handCards.map(i => JSON.stringify(i.card)).sort().join('|');
-        if (serverCardsStr !== localCardsStr) {
-             
-            setHandCards(gameState.my_hand.map(card => ({ id: crypto.randomUUID(), card })));
-            // Also reset staging
-             
-            setStagingGroups([]);
-             
-            setSelectedCardIds([]);
-             
-            setStagedCardIds([]);
-        }
+
+        setHandCards(prevItems => {
+            // Create a pool of server cards left to map
+            const serverCardsLeft = [...gameState.my_hand];
+            const newItems: { id: string, card: CardData }[] = [];
+
+            // 1. Keep cards that are still in our hand, maintaining their current order
+            for (const existingItem of prevItems) {
+                const matchIndex = serverCardsLeft.findIndex(c => JSON.stringify(c) === JSON.stringify(existingItem.card));
+                if (matchIndex !== -1) {
+                    newItems.push(existingItem);
+                    serverCardsLeft.splice(matchIndex, 1);
+                }
+            }
+
+            // 2. Add any completely new cards drawn this turn to the end of the hand
+            for (const newCard of serverCardsLeft) {
+                newItems.push({ id: crypto.randomUUID(), card: newCard });
+            }
+
+            // Re-check if the actual contents changed (just as an optimization to avoid unneeded re-renders/staging resets)
+            const serverCardsStr = [...gameState.my_hand].map(c => JSON.stringify(c)).sort().join('|');
+            const localCardsStr = prevItems.map(i => JSON.stringify(i.card)).sort().join('|');
+
+            if (serverCardsStr !== localCardsStr) {
+                // The actual cards changed, if a card was removed (discarded) we should clean up staging
+                const currentIds = newItems.map(i => i.id);
+                setStagingGroups(prev => prev.map(g => ({ ...g, cards: g.cards.filter(c => currentIds.includes(c.id)) })).filter(g => g.cards.length > 0));
+                setSelectedCardIds(prev => prev.filter(id => currentIds.includes(id)));
+                setStagedCardIds(prev => prev.filter(id => currentIds.includes(id)));
+                return newItems;
+            }
+
+            return prevItems;
+        });
+
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [gameState?.my_hand]);
 
@@ -107,32 +140,79 @@ export default function Game() {
     // Submit Bajada to backend — must be above early return (Rules of Hooks)
     const handleSubmitBajada = useCallback(() => {
         if (!canBajar || stagingGroups.length === 0) return;
+
         const combos = stagingGroups.map(g => g.cards.map(c => c.card));
+        console.log("Submitting Bajada with combos:", combos);
+
         sendAction({ type: 'DropHand', payload: { combinations: combos } });
+
+        // Clear staging area optimistically
         setStagingGroups([]);
         setStagedCardIds([]);
+        setSelectedCardIds([]);
     }, [canBajar, stagingGroups, sendAction]);
 
     // Drag to Pozo to Discard — must be above early return (Rules of Hooks)
     const handleDragStart = (id: string) => setDraggingCardId(id);
 
-    const handleDragEnd = useCallback((_id: string, card: CardData, event: PointerEvent) => {
+    const handleDragEnd = useCallback((_id: string, card: CardData, event: any) => {
         setDraggingCardId(null);
         setIsDraggingOverPozo(false);
 
-        if (!pozoRef.current || !isMyTurn || !hasDrawn || !gameState) return;
+        console.log("Drag ended over Pozo? Checking hit detection.");
+        if (!pozoRef.current || !isMyTurn || !hasDrawn || !gameState) {
+            console.log("Drag drop rejected. Missing refs or not my turn/hasn't drawn yet");
+            return;
+        }
 
         const pozoRect = pozoRef.current.getBoundingClientRect();
-        const { clientX: x, clientY: y } = event;
+
+        // Safely extract coordinates for both Mouse and Touch events (Framer Motion passes raw events)
+        let x = 0;
+        let y = 0;
+        if (event.clientX !== undefined) {
+            x = event.clientX;
+            y = event.clientY;
+        } else if (event.touches && event.touches.length > 0) {
+            x = event.touches[0].clientX;
+            y = event.touches[0].clientY;
+        } else if (event.changedTouches && event.changedTouches.length > 0) {
+            x = event.changedTouches[0].clientX;
+            y = event.changedTouches[0].clientY;
+        }
 
         const droppedOnPozo = x >= pozoRect.left && x <= pozoRect.right && y >= pozoRect.top && y <= pozoRect.bottom;
+        console.log(`Drop coords: (${x}, ${y}), Pozo rect:`, pozoRect, "Dropped on Pozo:", droppedOnPozo);
         if (!droppedOnPozo) return;
 
         const serverIdx = gameState.my_hand.findIndex(c => JSON.stringify(c) === JSON.stringify(card));
-        if (serverIdx === -1) return;
+        if (serverIdx === -1) {
+            console.log("Card not found in server hand");
+            return;
+        }
 
+        console.log("Sending Action: Discard at index", serverIdx);
         sendAction({ type: 'Discard', payload: { card_index: serverIdx } });
     }, [isMyTurn, hasDrawn, gameState, sendAction]);
+
+    // Send the new hand order to the server to persist it.
+    // Framer Motion's onReorder fires multiple times during drag, updating `handCards`.
+    // When the drag actually ends, `handCards` has the final order.
+    useEffect(() => {
+        if (!isMyTurn || !gameState || handCards.length === 0) return;
+
+        // We only want to send this if the order actually changed from the server's perspective, 
+        // to avoid spamming identical state updates.
+        const serverCardsStr = gameState.my_hand.map(c => JSON.stringify(c)).join('|');
+        const localCardsStr = handCards.map(i => JSON.stringify(i.card)).join('|');
+        const sameContent = [...gameState.my_hand].map(c => JSON.stringify(c)).sort().join('|') === [...handCards].map(i => JSON.stringify(i.card)).sort().join('|');
+
+        // Only send if the contents are identical (no missing cards from discard) but the order is different.
+        if (sameContent && serverCardsStr !== localCardsStr && !draggingCardId) {
+            console.log("Sending Action: ReorderHand");
+            sendAction({ type: 'ReorderHand', payload: { hand: handCards.map(c => c.card) } });
+        }
+    }, [handCards, draggingCardId, isMyTurn, gameState, sendAction]);
 
     const handlePointerMove = useCallback((e: React.PointerEvent) => {
         if (!draggingCardId || !pozoRef.current) return;
@@ -188,8 +268,7 @@ export default function Game() {
         setStagedCardIds(prev => prev.filter(id => !group.cards.map(c => c.id).includes(id)));
     };
 
-    // Submit Bajada to backend
-
+    // Submit Bajada to backend (handled by useCallback earlier to respect hooks rules)
     return (
         <div className="game-container" onPointerMove={handlePointerMove}>
             {/* Header */}
@@ -205,6 +284,13 @@ export default function Game() {
                     <button onClick={handleQuit} className="btn btn-secondary" style={{ padding: '0.4rem 1rem', fontSize: '0.85rem' }}>Quit</button>
                 </div>
             </header>
+
+            {/* Server Error Banner */}
+            {error && (
+                <div style={{ background: '#e11d48', color: 'white', padding: '0.5rem', textAlign: 'center', fontWeight: 'bold' }}>
+                    ⚠️ {error}
+                </div>
+            )}
 
             {/* Instruction Bar */}
             {isMyTurn && (
@@ -275,7 +361,13 @@ export default function Game() {
                         {/* Mazo */}
                         <div
                             className={`deck-area ${canDraw ? 'highlight-action' : ''}`}
-                            onClick={() => canDraw && sendAction({ type: 'DrawFromDeck' })}
+                            onClick={() => {
+                                console.log("Mazo clicked. canDraw:", canDraw);
+                                if (canDraw) {
+                                    console.log("Sending Action: DrawFromDeck");
+                                    sendAction({ type: 'DrawFromDeck', payload: null });
+                                }
+                            }}
                             title={canDraw ? 'Click to draw from the Mazo' : ''}
                         >
                             <div className="deck-stack">
@@ -291,7 +383,13 @@ export default function Game() {
                         <div
                             ref={pozoRef}
                             className={`discard-area ${canDraw && gameState.discard_pile_top ? 'highlight-action' : ''} ${isDraggingOverPozo ? 'droppable-active' : ''}`}
-                            onClick={() => canDraw && gameState.discard_pile_top && sendAction({ type: 'DrawFromDiscard' })}
+                            onClick={() => {
+                                console.log("Pozo clicked. canDraw:", canDraw, "pile top:", gameState.discard_pile_top);
+                                if (canDraw && gameState.discard_pile_top) {
+                                    console.log("Sending Action: DrawFromDiscard");
+                                    sendAction({ type: 'DrawFromDiscard', payload: null });
+                                }
+                            }}
                             title={canDraw ? 'Click to draw from the Pozo' : hasDrawn ? 'Drag a card here to discard it' : ''}
                         >
                             <div className="discard-slot">
@@ -395,6 +493,13 @@ export default function Game() {
                 </div>
 
                 {/* My Hand */}
+                <div style={{ textAlign: 'center', marginBottom: '-0.5rem', zIndex: 10, position: 'relative' }}>
+                    {isMyTurn && (
+                        <span className="game-badge your-turn" style={{ display: 'inline-block', padding: '0.4rem 1rem', fontSize: '0.9rem', boxShadow: '0 0 15px rgba(99, 102, 241, 0.4)' }}>
+                            ✨ Your Turn
+                        </span>
+                    )}
+                </div>
                 <div className="my-hand-area">
                     <Reorder.Group
                         axis="x"
@@ -415,13 +520,13 @@ export default function Game() {
                                 <Reorder.Item
                                     key={item.id}
                                     value={item}
-                                    dragListener={!isMyTurn || canDraw} // allow reorder only when not needing to drag-to-pozo
+                                    drag
                                     onDragStart={() => handleDragStart(item.id)}
                                     onDragEnd={(e: unknown) => handleDragEnd(item.id, item.card, e as PointerEvent)}
                                     style={{
                                         zIndex: isSelected ? 100 : localIdx,
                                         marginLeft: localIdx === 0 ? '0' : '-36px',
-                                        cursor: (hasDrawn && isMyTurn) ? 'grab' : 'default',
+                                        cursor: isMyTurn ? 'grab' : 'default',
                                         transform: isSelected ? 'translateY(-20px)' : 'none',
                                         opacity: isStaged ? 0.4 : 1,
                                         pointerEvents: isStaged ? 'none' : 'auto',

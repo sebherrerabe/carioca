@@ -1,14 +1,14 @@
 use axum::{
     extract::{
+        Query, State,
         ws::{Message, WebSocket, WebSocketUpgrade},
-        State, Query
     },
     response::IntoResponse,
 };
+use futures_util::{sink::SinkExt, stream::StreamExt};
+use jsonwebtoken::{DecodingKey, Validation, decode};
 use serde::Deserialize;
 use std::sync::Arc;
-use futures_util::{sink::SinkExt, stream::StreamExt};
-use jsonwebtoken::{decode, DecodingKey, Validation};
 
 use crate::api::server::AppState;
 
@@ -33,7 +33,11 @@ pub async fn ws_handler(
 ) -> impl IntoResponse {
     // Basic JWT Validation here for WS
     let validation = Validation::default();
-    let token_data = match decode::<Claims>(&query.token, &DecodingKey::from_secret(JWT_SECRET), &validation) {
+    let token_data = match decode::<Claims>(
+        &query.token,
+        &DecodingKey::from_secret(JWT_SECRET),
+        &validation,
+    ) {
         Ok(c) => c,
         Err(_) => return axum::http::StatusCode::UNAUTHORIZED.into_response(),
     };
@@ -48,15 +52,17 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>, user_id: String)
 
     // Create an mpsc channel to receive ServerMessages from the Room Actor (and other places)
     // to forward down the WebSocket to the client.
-    let (client_tx, mut client_rx) = tokio::sync::mpsc::channel::<crate::api::events::ServerMessage>(100);
+    let (client_tx, mut client_rx) =
+        tokio::sync::mpsc::channel::<crate::api::events::ServerMessage>(100);
 
     // Spawn a task to handle outbound messages to the client
     let mut send_task = tokio::spawn(async move {
         while let Some(msg) = client_rx.recv().await {
             if let Ok(text) = serde_json::to_string(&msg)
-                && sender.send(Message::Text(text.into())).await.is_err() {
-                    break;
-                }
+                && sender.send(Message::Text(text.into())).await.is_err()
+            {
+                break;
+            }
         }
     });
 
@@ -67,26 +73,38 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>, user_id: String)
 
     if let Some(players) = matched_players {
         println!("Match found! Players: {:?}", players);
-        
+
         let room_id = uuid::Uuid::new_v4().to_string();
-        
+
         let (tx, rx) = tokio::sync::mpsc::channel(100);
-        let room = crate::matchmaking::room::Room::new(room_id.clone(), players.clone(), rx, tx.clone());
-        
+        let room =
+            crate::matchmaking::room::Room::new(room_id.clone(), players.clone(), rx, tx.clone());
+
         tokio::spawn(async move {
             room.run().await;
         });
 
-        state.active_rooms.lock().await.insert(room_id.clone(), tx.clone());
-        
+        state
+            .active_rooms
+            .lock()
+            .await
+            .insert(room_id.clone(), tx.clone());
+
         // Notify the client that a match was found securely
-        let _ = client_tx.send(crate::api::events::ServerMessage::MatchFound {
-            room_id: room_id.clone(),
-            players: players.clone(),
-        }).await;
-        
+        let _ = client_tx
+            .send(crate::api::events::ServerMessage::MatchFound {
+                room_id: room_id.clone(),
+                players: players.clone(),
+            })
+            .await;
+
         // Now crucially, register this player's channel with the new room so it receives GameStateUpdates!
-        let _ = tx.send(crate::matchmaking::room::RoomEvent::PlayerJoined(user_id.clone(), client_tx.clone())).await;
+        let _ = tx
+            .send(crate::matchmaking::room::RoomEvent::PlayerJoined(
+                user_id.clone(),
+                client_tx.clone(),
+            ))
+            .await;
 
         current_room_id = Some(room_id);
     }
@@ -95,15 +113,32 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>, user_id: String)
     let inbound_user_id = user_id.clone();
     let inbound_state = state.clone();
     let inbound_room_id = current_room_id.clone();
-    
+
     let mut recv_task = tokio::spawn(async move {
         while let Some(msg) = receiver.next().await {
             if let Ok(Message::Text(text)) = msg {
-                if let Ok(action) = serde_json::from_str::<crate::api::events::ClientMessage>(&text)
-                    && let Some(room_id) = &inbound_room_id
-                        && let Some(room_tx) = inbound_state.active_rooms.lock().await.get(room_id) {
-                            let _ = room_tx.send(crate::matchmaking::room::RoomEvent::PlayerAction(inbound_user_id.clone(), action)).await;
+                match serde_json::from_str::<crate::api::events::ClientMessage>(&text) {
+                    Ok(action) => {
+                        if let Some(room_id) = &inbound_room_id {
+                            if let Some(room_tx) =
+                                inbound_state.active_rooms.lock().await.get(room_id)
+                            {
+                                let _ = room_tx
+                                    .send(crate::matchmaking::room::RoomEvent::PlayerAction(
+                                        inbound_user_id.clone(),
+                                        action,
+                                    ))
+                                    .await;
+                            }
                         }
+                    }
+                    Err(e) => {
+                        println!(
+                            "Failed to parse ClientMessage: {} from payload: {}",
+                            e, text
+                        );
+                    }
+                }
             } else {
                 break; // Connection lost or non-text message
             }
@@ -118,9 +153,14 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>, user_id: String)
 
     println!("User {} disconnected.", user_id);
     state.lobby.leave(&user_id).await;
-    
+
     if let Some(room_id) = current_room_id
-        && let Some(room_tx) = state.active_rooms.lock().await.get(&room_id) {
-            let _ = room_tx.send(crate::matchmaking::room::RoomEvent::PlayerLeft(user_id.clone())).await;
-        }
+        && let Some(room_tx) = state.active_rooms.lock().await.get(&room_id)
+    {
+        let _ = room_tx
+            .send(crate::matchmaking::room::RoomEvent::PlayerLeft(
+                user_id.clone(),
+            ))
+            .await;
+    }
 }

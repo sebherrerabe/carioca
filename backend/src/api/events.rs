@@ -4,12 +4,28 @@ use crate::engine::card::Card;
 use crate::engine::game::PlayerState;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(tag = "type", content = "payload")]
+#[serde(tag = "type")]
 pub enum ClientMessage {
     DrawFromDeck,
     DrawFromDiscard,
-    Discard { card_index: usize },
-    DropHand { combinations: Vec<Vec<Card>> }, // "bajarse"
+    Discard { payload: DiscardPayload },
+    DropHand { payload: DropHandPayload },
+    ReorderHand { payload: ReorderHandPayload },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DiscardPayload {
+    pub card_index: usize,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DropHandPayload {
+    pub combinations: Vec<Vec<Card>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ReorderHandPayload {
+    pub hand: Vec<Card>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -59,6 +59,7 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
                         setLocation('/game'); // Redirect automatically to the game board
                         break;
                     case 'GameStateUpdate':
+                        console.log("📥 Received GameStateUpdate:", msg.payload);
                         setGameState(msg.payload);
                         break;
                     case 'Error':

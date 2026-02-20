@@ -75,27 +75,28 @@ impl Room {
     fn check_bot_turn(&self) {
         let current_player_index = self.game_state.current_turn;
         if let Some(user_id) = self.players.get(current_player_index)
-            && user_id.starts_with("bot_") {
-                let diff = if user_id.contains("hard") {
-                    crate::engine::bot::BotDifficulty::Hard
-                } else if user_id.contains("medium") {
-                    crate::engine::bot::BotDifficulty::Medium
-                } else {
-                    crate::engine::bot::BotDifficulty::Easy
-                };
+            && user_id.starts_with("bot_")
+        {
+            let diff = if user_id.contains("hard") {
+                crate::engine::bot::BotDifficulty::Hard
+            } else if user_id.contains("medium") {
+                crate::engine::bot::BotDifficulty::Medium
+            } else {
+                crate::engine::bot::BotDifficulty::Easy
+            };
 
-                let sender = self.sender.clone();
-                let uid = user_id.clone();
-                let gs = self.game_state.clone();
+            let sender = self.sender.clone();
+            let uid = user_id.clone();
+            let gs = self.game_state.clone();
 
-                tokio::spawn(async move {
-                    // Slight human-like delay
-                    tokio::time::sleep(tokio::time::Duration::from_millis(1500)).await;
-                    if let Some(action) = crate::engine::bot::play_bot_turn(&gs, &uid, diff) {
-                        let _ = sender.send(RoomEvent::PlayerAction(uid, action)).await;
-                    }
-                });
-            }
+            tokio::spawn(async move {
+                // Slight human-like delay
+                tokio::time::sleep(tokio::time::Duration::from_millis(1500)).await;
+                if let Some(action) = crate::engine::bot::play_bot_turn(&gs, &uid, diff) {
+                    let _ = sender.send(RoomEvent::PlayerAction(uid, action)).await;
+                }
+            });
+        }
     }
 
     async fn handle_action(&mut self, user_id: String, action: ClientMessage) {
@@ -117,15 +118,20 @@ impl Room {
                     self.send_error(&user_id, e).await;
                 }
             }
-            ClientMessage::Discard { card_index } => {
-                if let Err(e) = self.game_state.discard(card_index) {
+            ClientMessage::Discard { payload } => {
+                if let Err(e) = self.game_state.discard(payload.card_index) {
                     self.send_error(&user_id, e).await;
                 }
             }
-            ClientMessage::DropHand { .. } => {
-                // TODO MVP bajadas parsing validation
-                self.send_error(&user_id, "Drop hand not fully implemented")
-                    .await;
+            ClientMessage::DropHand { payload } => {
+                if let Err(e) = self.game_state.drop_hand(&user_id, payload.combinations) {
+                    self.send_error(&user_id, e).await;
+                }
+            }
+            ClientMessage::ReorderHand { payload } => {
+                if let Err(e) = self.game_state.reorder_hand(&user_id, payload.hand) {
+                    self.send_error(&user_id, e).await;
+                }
             }
         }
     }

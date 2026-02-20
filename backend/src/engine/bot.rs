@@ -1,8 +1,8 @@
 use crate::api::events::ClientMessage;
 use crate::engine::game::GameState;
+use rand::RngExt;
 use rand::prelude::IndexedRandom;
 use rand::rng;
-use rand::RngExt;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -71,7 +71,9 @@ fn play_easy_bot(
             .copied()
             .unwrap_or(0);
         return Some(ClientMessage::Discard {
-            card_index: random_index,
+            payload: crate::api::events::DiscardPayload {
+                card_index: random_index,
+            },
         });
     }
 
@@ -150,7 +152,9 @@ fn play_medium_bot(
         }
 
         return Some(ClientMessage::Discard {
-            card_index: best_index,
+            payload: crate::api::events::DiscardPayload {
+                card_index: best_index,
+            },
         });
     }
     None
@@ -195,7 +199,9 @@ fn play_hard_bot(
         }
 
         return Some(ClientMessage::Discard {
-            card_index: best_index,
+            payload: crate::api::events::DiscardPayload {
+                card_index: best_index,
+            },
         });
     }
     None

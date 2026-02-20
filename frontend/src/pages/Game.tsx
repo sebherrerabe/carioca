@@ -28,8 +28,8 @@ export default function Game() {
                 <h2>Carioca Game Room</h2>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '2rem' }}>
                     <span style={{ color: 'var(--color-primary-main)' }}>{username}</span>
-                    <span>Round: <strong>{gameState.current_round}</strong></span>
-                    <span>Turn: Player {gameState.current_turn}</span>
+                    <span>Round Index: <strong>{gameState.current_round_index}</strong></span>
+                    <span>Turn: Player {gameState.current_turn_index}</span>
                     <button onClick={handleQuit} className="btn btn-secondary">Quit Match</button>
                 </div>
             </header>

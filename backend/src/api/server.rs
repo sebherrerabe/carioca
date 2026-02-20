@@ -41,13 +41,15 @@ pub async fn start_server(db_url: &str) {
         active_rooms: Arc::new(Mutex::new(HashMap::new())),
     });
 
+    let cors = CorsLayer::permissive();
+
     let app = Router::new()
         .route("/health", get(|| async { "OK" }))
         .route("/api/auth/register", post(auth::register))
         .route("/api/auth/login", post(auth::login))
         .route("/ws", get(ws::ws_handler))
-        .layer(CorsLayer::permissive())
         .layer(TraceLayer::new_for_http())
+        .layer(cors)
         .with_state(state);
 
     let listener = TcpListener::bind("0.0.0.0:3000")

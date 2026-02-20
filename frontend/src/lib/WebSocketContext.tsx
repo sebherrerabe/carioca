@@ -5,26 +5,24 @@ import { useLocation } from 'wouter';
 // Using the same data structures defined in the backend
 interface PlayerState {
     id: string;
-    hand: any[];
-    has_drawn: boolean;
+    hand_count: number;
     has_dropped_hand: boolean;
-    games_won: number;
+    points: number;
+    // We don't see their actual hand unless they drop it, or it's us
 }
 
-interface GameState {
+export interface GameState {
     players: PlayerState[];
-    current_round: string;
-    round_index: number;
-    current_turn: number;
-    deck_size: number;
-    discard_pile: any[];
+    current_round_index: number;
+    current_turn_index: number;
+    discard_pile_top: any; // Option<Card>
     is_game_over: boolean;
 }
 
 type ServerMessage =
-    | { type: 'GameStart', state: GameState }
-    | { type: 'StateUpdate', state: GameState }
-    | { type: 'Error', message: string };
+    | { type: 'MatchFound', payload: { room_id: string, players: string[] } }
+    | { type: 'GameStateUpdate', payload: GameState }
+    | { type: 'Error', payload: { message: string } };
 
 interface WebSocketContextType {
     socket: WebSocket | null;
@@ -52,15 +50,14 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
             try {
                 const msg: ServerMessage = JSON.parse(event.data);
                 switch (msg.type) {
-                    case 'GameStart':
-                        setGameState(msg.state);
+                    case 'MatchFound':
                         setLocation('/game'); // Redirect automatically to the game board
                         break;
-                    case 'StateUpdate':
-                        setGameState(msg.state);
+                    case 'GameStateUpdate':
+                        setGameState(msg.payload);
                         break;
                     case 'Error':
-                        setError(msg.message);
+                        setError(msg.payload.message);
                         break;
                 }
             } catch (err) {

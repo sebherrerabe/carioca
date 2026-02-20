@@ -4,7 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "dev:backend": "cd backend && cargo run",
+    "dev:backend": "cd backend && cargo watch -c -x run",
     "dev:frontend": "cd frontend && pnpm run dev",
     "dev": "concurrently \"pnpm run dev:backend\" \"pnpm run dev:frontend\"",
     "build:backend": "cd backend && cargo build --release",

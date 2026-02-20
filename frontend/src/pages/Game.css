@@ -61,17 +61,20 @@
 /* Main Board */
 .game-board {
     flex: 1;
+    min-height: 0;
     display: flex;
     flex-direction: column;
     position: relative;
+    overflow: hidden;
 }
 
 /* Opponents */
 .opponents-row {
     display: flex;
     justify-content: center;
-    gap: 3rem;
-    padding: 1.5rem 2rem;
+    gap: 2rem;
+    padding: 0.75rem 2rem;
+    flex-shrink: 0;
 }
 
 .opponent-slot {
@@ -133,13 +136,32 @@
     opacity: 0.5;
 }
 
-/* Table Center */
-.table-center {
+/* Main Table Area Split */
+.table-main-area {
     flex: 1;
+    min-height: 0;
+    /* prevent overflowing flex parent */
     display: flex;
+    padding: 0 2rem;
+    gap: 2rem;
+    overflow: hidden;
+}
+
+.table-left-side {
+    flex: 0 0 200px;
+    display: flex;
+    flex-direction: column;
     justify-content: center;
     align-items: center;
-    gap: 6rem;
+    gap: 2rem;
+}
+
+.table-right-side {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
 }
 
 .deck-area,
@@ -159,19 +181,21 @@
 
 .deck-stack {
     position: relative;
-    width: 100px;
-    height: 140px;
+    width: 88px;
+    height: 120px;
+    overflow: visible;
 }
 
 .discard-slot {
-    width: 100px;
-    height: 140px;
+    width: 80px;
+    height: 112px;
     border: 2px dashed rgba(255, 255, 255, 0.15);
     border-radius: 8px;
     display: flex;
     justify-content: center;
     align-items: center;
     background: rgba(255, 255, 255, 0.02);
+    overflow: hidden;
 }
 
 .discard-empty {
@@ -189,11 +213,14 @@
 
 /* My Hand */
 .my-hand-area {
+    flex: 0 0 auto;
     display: flex;
     justify-content: center;
     align-items: flex-end;
-    padding: 0.5rem 2rem 2rem;
-    min-height: 180px;
+    padding: 0.5rem 2rem 1.5rem;
+    min-height: 160px;
+    height: 175px;
+    overflow: visible;
 }
 
 .my-hand {
@@ -208,4 +235,220 @@
 
 .my-hand .playing-card:hover {
     box-shadow: 0 -5px 25px rgba(99, 102, 241, 0.3), 0 10px 15px rgba(0, 0, 0, 0.3);
+}
+
+/* Instruction Bar */
+.instruction-bar {
+    padding: 0.6rem 2rem;
+    background: rgba(99, 102, 241, 0.15);
+    border-bottom: 1px solid rgba(99, 102, 241, 0.3);
+    font-size: 0.95rem;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.9);
+    text-align: center;
+    letter-spacing: 0.02em;
+    animation: pulse-bar 2s ease-in-out infinite;
+}
+
+@keyframes pulse-bar {
+
+    0%,
+    100% {
+        background: rgba(99, 102, 241, 0.15);
+    }
+
+    50% {
+        background: rgba(99, 102, 241, 0.25);
+    }
+}
+
+/* Pozo droppable state */
+.discard-area.droppable-active .discard-slot {
+    border-color: #e11d48;
+    box-shadow: 0 0 25px rgba(225, 29, 72, 0.6);
+}
+
+.pozo-drop-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(225, 29, 72, 0.3);
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 0.8rem;
+    color: white;
+    pointer-events: none;
+}
+
+.discard-slot {
+    position: relative;
+}
+
+/* Staging Panel */
+.staging-panel {
+    background: rgba(0, 0, 0, 0.45);
+    border: 1px solid rgba(99, 102, 241, 0.3);
+    border-radius: 12px;
+    padding: 0.85rem 1rem;
+    width: 100%;
+    max-width: 520px;
+    backdrop-filter: blur(6px);
+    margin-bottom: 1rem;
+}
+
+.staging-panel-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.75rem;
+    font-weight: 600;
+    font-size: 0.9rem;
+    color: var(--color-primary-main);
+}
+
+.staging-hint {
+    font-size: 0.75rem;
+    opacity: 0.7;
+    color: white;
+    font-weight: 400;
+}
+
+.staging-groups {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    min-height: 48px;
+    margin-bottom: 0.75rem;
+}
+
+.staging-empty {
+    color: rgba(255, 255, 255, 0.35);
+    font-size: 0.85rem;
+    font-style: italic;
+    text-align: center;
+    padding: 0.5rem 0;
+}
+
+.staging-group {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    padding: 0.4rem 0.6rem;
+}
+
+.staging-group-cards {
+    display: flex;
+    gap: 0.3rem;
+    flex-wrap: wrap;
+    flex: 1;
+}
+
+.staging-card-mini {
+    background: white;
+    color: #111;
+    border-radius: 4px;
+    width: 38px;
+    height: 50px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.7rem;
+    font-weight: 700;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.staging-remove-btn {
+    background: none;
+    border: none;
+    color: rgba(255, 255, 255, 0.4);
+    cursor: pointer;
+    font-size: 0.9rem;
+    padding: 0 0.25rem;
+    flex-shrink: 0;
+    transition: color 0.15s;
+}
+
+.staging-remove-btn:hover {
+    color: #e11d48;
+}
+
+.staging-actions {
+    display: flex;
+    gap: 0.75rem;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.staging-locked-label {
+    font-size: 0.8rem;
+    color: rgba(255, 255, 255, 0.4);
+    font-style: italic;
+}
+
+
+/* Rules Banner */
+.rules-banner {
+    background: rgba(255, 255, 255, 0.1);
+    padding: 0.5rem 1rem;
+    border-radius: 8px;
+    margin-right: 1rem;
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: var(--color-primary-main);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+/* Scoreboard Modal */
+.scoreboard-modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.7);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+    backdrop-filter: blur(4px);
+}
+
+.scoreboard-modal {
+    background: #1a1a1a;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    padding: 2rem;
+    width: 90%;
+    max-width: 600px;
+}
+
+.scoreboard-modal h2 {
+    margin-top: 0;
+    color: white;
+}
+
+.scoreboard-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 1rem;
+    color: white;
+}
+
+.scoreboard-table th,
+.scoreboard-table td {
+    padding: 0.75rem;
+    text-align: left;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.scoreboard-table th {
+    color: rgba(255, 255, 255, 0.5);
+    font-weight: 500;
 }

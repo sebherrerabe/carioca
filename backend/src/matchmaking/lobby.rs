@@ -1,6 +1,6 @@
+use std::collections::VecDeque;
 use std::sync::Arc;
 use tokio::sync::Mutex;
-use std::collections::VecDeque;
 
 #[derive(Clone)]
 pub struct Lobby {
@@ -17,7 +17,7 @@ impl Lobby {
 
     pub async fn join(&self, user_id: String) -> Option<Vec<String>> {
         let queue = self.waiting_players.lock().await;
-        
+
         // Prevent duplicate joins
         if queue.contains(&user_id) {
             return None;
@@ -38,5 +38,11 @@ impl Lobby {
     pub async fn leave(&self, user_id: &str) {
         let mut queue = self.waiting_players.lock().await;
         queue.retain(|id| id != user_id);
+    }
+}
+
+impl Default for Lobby {
+    fn default() -> Self {
+        Self::new()
     }
 }

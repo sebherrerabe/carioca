@@ -1,15 +1,16 @@
 .playing-card {
-    width: 100px;
-    height: 140px;
+    width: 80px;
+    height: 112px;
+    overflow: hidden;
     background-color: white;
-    border-radius: 8px;
+    border-radius: 6px;
     box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.4), 0 2px 4px -1px rgba(0, 0, 0, 0.2);
     position: relative;
     user-select: none;
     cursor: grab;
     display: flex;
     flex-direction: column;
-    padding: 8px;
+    padding: 6px;
     box-sizing: border-box;
     font-family: 'Inter', sans-serif;
     transition: box-shadow 0.2s;
@@ -37,24 +38,24 @@
 }
 
 .card-corner.top-left {
-    top: 6px;
-    left: 6px;
+    top: 4px;
+    left: 4px;
 }
 
 .card-corner.bottom-right {
-    bottom: 6px;
-    right: 6px;
+    bottom: 4px;
+    right: 4px;
     transform: rotate(180deg);
 }
 
 .card-value {
-    font-size: 1.25rem;
+    font-size: 1rem;
     font-weight: 700;
-    letter-spacing: -1px;
+    letter-spacing: -0.5px;
 }
 
 .card-suit {
-    font-size: 1.1rem;
+    font-size: 0.9rem;
     margin-top: -2px;
 }
 
@@ -66,7 +67,7 @@
 }
 
 .card-suit-large {
-    font-size: 3rem;
+    font-size: 2.4rem;
     opacity: 0.8;
 }
 
@@ -81,15 +82,15 @@
 
 .joker-text {
     font-weight: 800;
-    font-size: 1.1rem;
-    letter-spacing: 2px;
+    font-size: 0.7rem;
+    letter-spacing: 1px;
     writing-mode: vertical-rl;
     text-orientation: upright;
 }
 
 .joker-icon {
-    font-size: 2rem;
-    margin-top: 8px;
+    font-size: 1.2rem;
+    margin-top: 4px;
 }
 
 /* Back of the card */

@@ -1,0 +1,9 @@
+{
+    "name": "carioca-backend",
+    "version": "1.0.0",
+    "private": true,
+    "scripts": {
+        "predev": "fuser -k 3000/tcp || true",
+        "dev": "cargo watch -c -x run"
+    }
+}

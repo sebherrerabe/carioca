@@ -29,6 +29,35 @@ impl RoundType {
             RoundType::EscalaReal,
         ]
     }
+
+    pub fn description(&self) -> &'static str {
+        match self {
+            RoundType::TwoTrios => "2 Tríos (6 cards)",
+            RoundType::OneTrioOneEscala => "1 Trío, 1 Escala (7 cards)",
+            RoundType::TwoEscalas => "2 Escalas (8 cards)",
+            RoundType::ThreeTrios => "3 Tríos (9 cards)",
+            RoundType::TwoTriosOneEscala => "2 Tríos, 1 Escala (10 cards)",
+            RoundType::OneTrioTwoEscalas => "1 Trío, 2 Escalas (11 cards)",
+            RoundType::ThreeEscalas => "3 Escalas (12 cards)",
+            RoundType::FourTrios => "4 Tríos (12 cards)",
+            RoundType::EscalaReal => "Escala Real (13 cards, same suit)",
+        }
+    }
+
+    pub fn get_requirements(&self) -> (usize, usize) {
+        // Returns (required_trios, required_escalas)
+        match self {
+            RoundType::TwoTrios => (2, 0),
+            RoundType::OneTrioOneEscala => (1, 1),
+            RoundType::TwoEscalas => (0, 2),
+            RoundType::ThreeTrios => (3, 0),
+            RoundType::TwoTriosOneEscala => (2, 1),
+            RoundType::OneTrioTwoEscalas => (1, 2),
+            RoundType::ThreeEscalas => (0, 3),
+            RoundType::FourTrios => (4, 0),
+            RoundType::EscalaReal => (0, 1), // Special case 13 cards
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -48,6 +77,8 @@ pub struct PlayerState {
     pub hand: Vec<Card>,
     pub points: u32,
     pub has_dropped_hand: bool, // "bajado"
+    pub dropped_combinations: Vec<Vec<Card>>,
+    pub turns_played: u32, // How many full turns (draw+discard) this player has completed this round
 }
 
 impl GameState {
@@ -59,6 +90,8 @@ impl GameState {
                 hand: Vec::new(),
                 points: 0,
                 has_dropped_hand: false,
+                dropped_combinations: Vec::new(),
+                turns_played: 0,
             })
             .collect();
 
@@ -81,6 +114,8 @@ impl GameState {
         for player in &mut self.players {
             player.hand.clear();
             player.has_dropped_hand = false;
+            player.dropped_combinations.clear();
+            player.turns_played = 0;
             // Deal 12 cards to each player
             for _ in 0..12 {
                 if let Some(card) = self.deck.draw() {
@@ -152,6 +187,9 @@ impl GameState {
         let hand_is_empty = player.hand.is_empty();
 
         self.discard_pile.push(card);
+
+        // Increment turns played for this player
+        self.players[idx].turns_played += 1;
 
         // Check if player won the round (no cards left)
         if hand_is_empty {

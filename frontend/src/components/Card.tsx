@@ -20,7 +20,7 @@ interface CardProps {
     faceDown?: boolean;
     onClick?: () => void;
     isDraggable?: boolean;
-    onDragEnd?: (info: any) => void;
+    onDragEnd?: (info: unknown) => void;
     className?: string;
     style?: React.CSSProperties;
 }
@@ -59,12 +59,14 @@ export const Card: React.FC<CardProps> = ({
     if (card === 'Joker') {
         return (
             <motion.div
+                layout
                 className={clsx('playing-card joker-card', className)}
                 style={style}
                 onClick={onClick}
                 drag={isDraggable}
                 dragConstraints={{ top: 0, left: 0, right: 0, bottom: 0 }}
-                dragElastic={0.2}
+                dragElastic={0}
+                dragMomentum={false}
                 onDragEnd={(_, info) => onDragEnd?.(info)}
                 whileHover={isDraggable ? { y: -15, zIndex: 10 } : { scale: 1.05 }}
                 whileDrag={{ scale: 1.1, zIndex: 100, boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.5)' }}
@@ -86,12 +88,14 @@ export const Card: React.FC<CardProps> = ({
 
     return (
         <motion.div
+            layout
             className={clsx('playing-card', isRed ? 'red-suit' : 'black-suit', className)}
             style={style}
             onClick={onClick}
             drag={isDraggable}
             dragConstraints={{ top: 0, left: 0, right: 0, bottom: 0 }}
-            dragElastic={0.2}
+            dragElastic={0}
+            dragMomentum={false}
             onDragEnd={(_, info) => onDragEnd?.(info)}
             whileHover={isDraggable ? { y: -15, zIndex: 10 } : { scale: 1.05 }}
             whileDrag={{ scale: 1.1, zIndex: 100, boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.5)' }}

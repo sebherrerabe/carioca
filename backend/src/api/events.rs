@@ -28,6 +28,7 @@ pub enum ServerMessage {
         // We send a sanitized state (hiding other players' hands)
         players: Vec<SanitizedPlayerState>,
         current_round_index: usize,
+        current_round_rules: String,
         current_turn_index: usize,
         discard_pile_top: Option<Card>,
         is_game_over: bool,
@@ -40,6 +41,8 @@ pub struct SanitizedPlayerState {
     pub hand_count: usize, // Hide actual cards
     pub has_dropped_hand: bool,
     pub points: u32,
+    pub dropped_combinations: Vec<Vec<Card>>,
+    pub turns_played: u32,
 }
 
 impl SanitizedPlayerState {
@@ -49,6 +52,8 @@ impl SanitizedPlayerState {
             hand_count: state.hand.len(),
             has_dropped_hand: state.has_dropped_hand,
             points: state.points,
+            dropped_combinations: state.dropped_combinations.clone(),
+            turns_played: state.turns_played,
         }
     }
 }

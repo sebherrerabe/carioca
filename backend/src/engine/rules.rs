@@ -88,6 +88,7 @@ pub fn is_valid_escala(cards: &[Card]) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::engine::card::Suit;
 
     #[test]
     fn test_valid_trio_no_joker() {

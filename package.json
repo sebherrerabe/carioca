@@ -4,13 +4,9 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "dev:backend": "cd backend && cargo watch -c -x run",
-    "dev:frontend": "cd frontend && pnpm run dev",
-    "dev": "concurrently \"pnpm run dev:backend\" \"pnpm run dev:frontend\"",
-    "build:backend": "cd backend && cargo build --release",
-    "build:frontend": "cd frontend && pnpm run build",
-    "build": "pnpm run build:backend && pnpm run build:frontend",
-    "test:backend": "cd backend && cargo test"
+    "dev": "pnpm -r --parallel run dev",
+    "build": "pnpm -r run build",
+    "test": "pnpm -r run test"
   },
   "keywords": [],
   "author": "",

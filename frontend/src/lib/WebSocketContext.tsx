@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components */
 import { createContext, useContext, useState } from 'react';
 import type { ReactNode } from 'react';
 import { useLocation } from 'wouter';
@@ -9,13 +10,15 @@ interface PlayerState {
     hand_count: number;
     has_dropped_hand: boolean;
     points: number;
-    // We don't see their actual hand unless they drop it, or it's us
+    dropped_combinations: CardData[][];
+    turns_played: number;
 }
 
 export interface GameState {
     my_hand: CardData[];
     players: PlayerState[];
     current_round_index: number;
+    current_round_rules: string;
     current_turn_index: number;
     discard_pile_top: CardData | null;
     is_game_over: boolean;
@@ -31,7 +34,7 @@ interface WebSocketContextType {
     gameState: GameState | null;
     connect: (token: string) => void;
     disconnect: () => void;
-    sendAction: (action: any) => void;
+    sendAction: (action: unknown) => void;
     error: string | null;
 }
 
@@ -82,7 +85,7 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
         }
     };
 
-    const sendAction = (action: any) => {
+    const sendAction = (action: unknown) => {
         if (socket && socket.readyState === WebSocket.OPEN) {
             socket.send(JSON.stringify(action));
         }

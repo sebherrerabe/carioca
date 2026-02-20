@@ -1,6 +1,6 @@
-use tokio::sync::mpsc;
+use crate::api::events::{ClientMessage, SanitizedPlayerState, ServerMessage};
 use crate::engine::game::GameState;
-use crate::api::events::{ClientMessage, ServerMessage, SanitizedPlayerState};
+use tokio::sync::mpsc;
 
 #[derive(Debug, Clone)]
 pub enum RoomEvent {
@@ -22,10 +22,15 @@ pub struct Room {
 }
 
 impl Room {
-    pub fn new(id: String, players: Vec<String>, receiver: mpsc::Receiver<RoomEvent>, sender: mpsc::Sender<RoomEvent>) -> Self {
+    pub fn new(
+        id: String,
+        players: Vec<String>,
+        receiver: mpsc::Receiver<RoomEvent>,
+        sender: mpsc::Sender<RoomEvent>,
+    ) -> Self {
         let mut game_state = GameState::new(players.clone());
         game_state.start_round();
-        
+
         Self {
             id,
             game_state,
@@ -59,7 +64,7 @@ impl Room {
                     self.broadcast_state().await;
                 }
             }
-            
+
             // Check if it's a bot's turn to play
             self.check_bot_turn();
         }
@@ -69,8 +74,8 @@ impl Room {
 
     fn check_bot_turn(&self) {
         let current_player_index = self.game_state.current_turn;
-        if let Some(user_id) = self.players.get(current_player_index) {
-            if user_id.starts_with("bot_") {
+        if let Some(user_id) = self.players.get(current_player_index)
+            && user_id.starts_with("bot_") {
                 let diff = if user_id.contains("hard") {
                     crate::engine::bot::BotDifficulty::Hard
                 } else if user_id.contains("medium") {
@@ -82,7 +87,7 @@ impl Room {
                 let sender = self.sender.clone();
                 let uid = user_id.clone();
                 let gs = self.game_state.clone();
-                
+
                 tokio::spawn(async move {
                     // Slight human-like delay
                     tokio::time::sleep(tokio::time::Duration::from_millis(1500)).await;
@@ -91,7 +96,6 @@ impl Room {
                     }
                 });
             }
-        }
     }
 
     async fn handle_action(&mut self, user_id: String, action: ClientMessage) {
@@ -120,27 +124,38 @@ impl Room {
             }
             ClientMessage::DropHand { .. } => {
                 // TODO MVP bajadas parsing validation
-                self.send_error(&user_id, "Drop hand not fully implemented").await;
+                self.send_error(&user_id, "Drop hand not fully implemented")
+                    .await;
             }
         }
     }
 
     async fn send_error(&self, user_id: &str, msg: &str) {
         if let Some(sender) = self.player_channels.get(user_id) {
-            let _ = sender.send(ServerMessage::Error { message: msg.to_string() }).await;
+            let _ = sender
+                .send(ServerMessage::Error {
+                    message: msg.to_string(),
+                })
+                .await;
         }
     }
 
     async fn broadcast_state(&self) {
-        let sanitized_players: Vec<SanitizedPlayerState> = self.game_state.players.iter()
-            .map(|p| SanitizedPlayerState::from_player_state(p))
+        let sanitized_players: Vec<SanitizedPlayerState> = self
+            .game_state
+            .players
+            .iter()
+            .map(SanitizedPlayerState::from_player_state)
             .collect();
 
         let top_discard = self.game_state.discard_pile.last().cloned();
 
         for (user_id, sender) in &self.player_channels {
             // Find this specific user's hand, default to empty if not found somehow
-            let my_hand = self.game_state.players.iter()
+            let my_hand = self
+                .game_state
+                .players
+                .iter()
                 .find(|p| &p.id == user_id)
                 .map(|p| p.hand.clone())
                 .unwrap_or_default();
@@ -149,8 +164,9 @@ impl Room {
                 my_hand,
                 players: sanitized_players.clone(),
                 current_round_index: self.game_state.round_index,
+                current_round_rules: self.game_state.current_round.description().to_string(),
                 current_turn_index: self.game_state.current_turn,
-                discard_pile_top: top_discard.clone(),
+                discard_pile_top: top_discard,
                 is_game_over: self.game_state.is_game_over,
             };
 

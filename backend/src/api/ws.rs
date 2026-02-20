@@ -53,11 +53,10 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>, user_id: String)
     // Spawn a task to handle outbound messages to the client
     let mut send_task = tokio::spawn(async move {
         while let Some(msg) = client_rx.recv().await {
-            if let Ok(text) = serde_json::to_string(&msg) {
-                if sender.send(Message::Text(text.into())).await.is_err() {
+            if let Ok(text) = serde_json::to_string(&msg)
+                && sender.send(Message::Text(text.into())).await.is_err() {
                     break;
                 }
-            }
         }
     });
 
@@ -100,13 +99,11 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>, user_id: String)
     let mut recv_task = tokio::spawn(async move {
         while let Some(msg) = receiver.next().await {
             if let Ok(Message::Text(text)) = msg {
-                if let Ok(action) = serde_json::from_str::<crate::api::events::ClientMessage>(&text) {
-                    if let Some(room_id) = &inbound_room_id {
-                        if let Some(room_tx) = inbound_state.active_rooms.lock().await.get(room_id) {
+                if let Ok(action) = serde_json::from_str::<crate::api::events::ClientMessage>(&text)
+                    && let Some(room_id) = &inbound_room_id
+                        && let Some(room_tx) = inbound_state.active_rooms.lock().await.get(room_id) {
                             let _ = room_tx.send(crate::matchmaking::room::RoomEvent::PlayerAction(inbound_user_id.clone(), action)).await;
                         }
-                    }
-                }
             } else {
                 break; // Connection lost or non-text message
             }
@@ -122,9 +119,8 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>, user_id: String)
     println!("User {} disconnected.", user_id);
     state.lobby.leave(&user_id).await;
     
-    if let Some(room_id) = current_room_id {
-        if let Some(room_tx) = state.active_rooms.lock().await.get(&room_id) {
+    if let Some(room_id) = current_room_id
+        && let Some(room_tx) = state.active_rooms.lock().await.get(&room_id) {
             let _ = room_tx.send(crate::matchmaking::room::RoomEvent::PlayerLeft(user_id.clone())).await;
         }
-    }
 }

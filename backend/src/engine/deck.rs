@@ -3,6 +3,7 @@ use rand::seq::SliceRandom;
 // use rand::thread_rng; // rand 0.9 removed this from root
 use rand::rng;
 
+#[derive(Clone)]
 pub struct Deck {
     cards: Vec<Card>,
 }

@@ -31,6 +31,7 @@ impl RoundType {
     }
 }
 
+#[derive(Clone)]
 pub struct GameState {
     pub players: Vec<PlayerState>,
     pub current_round: RoundType,

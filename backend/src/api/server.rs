@@ -14,7 +14,7 @@ use crate::api::auth;
 use crate::api::ws;
 
 use crate::matchmaking::lobby::Lobby;
-use crate::matchmaking::room::{Room, RoomEvent};
+use crate::matchmaking::room::RoomEvent;
 use tokio::sync::mpsc;
 
 #[derive(Clone)]

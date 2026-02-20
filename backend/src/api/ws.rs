@@ -20,6 +20,7 @@ pub struct WsQuery {
 #[derive(Deserialize)]
 struct Claims {
     sub: String,
+    #[allow(dead_code)]
     exp: usize,
 }
 
@@ -59,7 +60,7 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>, user_id: String)
         let room_id = uuid::Uuid::new_v4().to_string();
         
         let (tx, rx) = tokio::sync::mpsc::channel(100);
-        let room = crate::matchmaking::room::Room::new(room_id.clone(), players.clone(), rx);
+        let room = crate::matchmaking::room::Room::new(room_id.clone(), players.clone(), rx, tx.clone());
         
         // Spawn the room actor
         tokio::spawn(async move {

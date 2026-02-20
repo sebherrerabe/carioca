@@ -18,10 +18,11 @@ pub struct Room {
     pub player_channels: HashMap<String, mpsc::Sender<ServerMessage>>,
     // Channel to receive events from player WebSocket connections
     pub receiver: mpsc::Receiver<RoomEvent>,
+    pub sender: mpsc::Sender<RoomEvent>,
 }
 
 impl Room {
-    pub fn new(id: String, players: Vec<String>, receiver: mpsc::Receiver<RoomEvent>) -> Self {
+    pub fn new(id: String, players: Vec<String>, receiver: mpsc::Receiver<RoomEvent>, sender: mpsc::Sender<RoomEvent>) -> Self {
         let mut game_state = GameState::new(players.clone());
         game_state.start_round();
         
@@ -31,11 +32,15 @@ impl Room {
             players,
             player_channels: HashMap::new(),
             receiver,
+            sender,
         }
     }
 
     pub async fn run(mut self) {
         println!("Room {} started with players {:?}", self.id, self.players);
+
+        // Trigger bot turn if the first player happens to be a bot
+        self.check_bot_turn();
 
         while let Some(event) = self.receiver.recv().await {
             match event {
@@ -50,14 +55,43 @@ impl Room {
                     // For MVP maybe just end game or pause
                 }
                 RoomEvent::PlayerAction(user_id, action) => {
-                    // TODO Handle individual action
                     self.handle_action(user_id, action).await;
                     self.broadcast_state().await;
                 }
             }
+            
+            // Check if it's a bot's turn to play
+            self.check_bot_turn();
         }
 
         println!("Room {} loop ended", self.id);
+    }
+
+    fn check_bot_turn(&self) {
+        let current_player_index = self.game_state.current_turn;
+        if let Some(user_id) = self.players.get(current_player_index) {
+            if user_id.starts_with("bot_") {
+                let diff = if user_id.contains("hard") {
+                    crate::engine::bot::BotDifficulty::Hard
+                } else if user_id.contains("medium") {
+                    crate::engine::bot::BotDifficulty::Medium
+                } else {
+                    crate::engine::bot::BotDifficulty::Easy
+                };
+
+                let sender = self.sender.clone();
+                let uid = user_id.clone();
+                let gs = self.game_state.clone();
+                
+                tokio::spawn(async move {
+                    // Slight human-like delay
+                    tokio::time::sleep(tokio::time::Duration::from_millis(1500)).await;
+                    if let Some(action) = crate::engine::bot::play_bot_turn(&gs, &uid, diff) {
+                        let _ = sender.send(RoomEvent::PlayerAction(uid, action)).await;
+                    }
+                });
+            }
+        }
     }
 
     async fn handle_action(&mut self, user_id: String, action: ClientMessage) {

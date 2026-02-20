@@ -4,9 +4,18 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "dev:backend": "cd backend && cargo run",
+    "dev:frontend": "cd frontend && pnpm run dev",
+    "dev": "concurrently \"pnpm run dev:backend\" \"pnpm run dev:frontend\"",
+    "build:backend": "cd backend && cargo build --release",
+    "build:frontend": "cd frontend && pnpm run build",
+    "build": "pnpm run build:backend && pnpm run build:frontend",
+    "test:backend": "cd backend && cargo test"
   },
   "keywords": [],
   "author": "",
-  "license": "ISC"
+  "license": "ISC",
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  }
 }

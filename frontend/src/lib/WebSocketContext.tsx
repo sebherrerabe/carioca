@@ -1,6 +1,7 @@
 import { createContext, useContext, useState } from 'react';
 import type { ReactNode } from 'react';
 import { useLocation } from 'wouter';
+import type { CardData } from '../components/Card';
 
 // Using the same data structures defined in the backend
 interface PlayerState {
@@ -12,10 +13,11 @@ interface PlayerState {
 }
 
 export interface GameState {
+    my_hand: CardData[];
     players: PlayerState[];
     current_round_index: number;
     current_turn_index: number;
-    discard_pile_top: any; // Option<Card>
+    discard_pile_top: CardData | null;
     is_game_over: boolean;
 }
 

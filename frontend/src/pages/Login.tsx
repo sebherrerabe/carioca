@@ -13,6 +13,7 @@ export default function Login() {
         onSuccess: (data) => {
             localStorage.setItem('token', data.token);
             localStorage.setItem('username', username);
+            localStorage.setItem('user_id', data.user_id);
             setLocation('/lobby');
         },
     });

@@ -1,0 +1,211 @@
+/* Game Layout */
+.game-container {
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    background: linear-gradient(135deg, #0d1b2a 0%, #1b2838 50%, #0d1b2a 100%);
+    overflow: hidden;
+    color: white;
+}
+
+.game-header {
+    padding: 0.75rem 2rem;
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(10px);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    z-index: 10;
+}
+
+.game-header-info {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.game-username {
+    color: var(--color-primary-main);
+    font-weight: 600;
+}
+
+.game-badge {
+    background: rgba(255, 255, 255, 0.1);
+    padding: 0.25rem 0.75rem;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    font-weight: 500;
+}
+
+.game-badge.your-turn {
+    background: var(--color-primary-main);
+    color: white;
+    animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+
+    0%,
+    100% {
+        opacity: 1;
+        transform: scale(1);
+    }
+
+    50% {
+        opacity: 0.8;
+        transform: scale(1.05);
+    }
+}
+
+/* Main Board */
+.game-board {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+}
+
+/* Opponents */
+.opponents-row {
+    display: flex;
+    justify-content: center;
+    gap: 3rem;
+    padding: 1.5rem 2rem;
+}
+
+.opponent-slot {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.75rem 1rem;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    transition: all 0.3s ease;
+    min-width: 120px;
+}
+
+.opponent-slot.active-turn {
+    border-color: var(--color-primary-main);
+    background: rgba(99, 102, 241, 0.1);
+    box-shadow: 0 0 20px rgba(99, 102, 241, 0.15);
+}
+
+.opponent-avatar {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.1);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 1.3rem;
+    border: 2px solid rgba(255, 255, 255, 0.15);
+}
+
+.opponent-slot.active-turn .opponent-avatar {
+    border-color: var(--color-primary-main);
+}
+
+.opponent-name {
+    font-size: 0.8rem;
+    font-weight: 500;
+    opacity: 0.9;
+    white-space: nowrap;
+}
+
+.opponent-cards-row {
+    display: flex;
+    align-items: center;
+    margin: 0.25rem 0;
+}
+
+.opponent-extra {
+    font-size: 0.7rem;
+    color: var(--color-primary-main);
+    margin-left: 4px;
+}
+
+.opponent-card-count {
+    font-size: 0.7rem;
+    opacity: 0.5;
+}
+
+/* Table Center */
+.table-center {
+    flex: 1;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 6rem;
+}
+
+.deck-area,
+.discard-area {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.75rem;
+    cursor: pointer;
+    transition: transform 0.2s;
+}
+
+.deck-area:hover,
+.discard-area:hover {
+    transform: translateY(-3px);
+}
+
+.deck-stack {
+    position: relative;
+    width: 100px;
+    height: 140px;
+}
+
+.discard-slot {
+    width: 100px;
+    height: 140px;
+    border: 2px dashed rgba(255, 255, 255, 0.15);
+    border-radius: 8px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background: rgba(255, 255, 255, 0.02);
+}
+
+.discard-empty {
+    opacity: 0.3;
+    font-size: 0.85rem;
+}
+
+.deck-label {
+    font-size: 0.8rem;
+    opacity: 0.5;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    font-weight: 500;
+}
+
+/* My Hand */
+.my-hand-area {
+    display: flex;
+    justify-content: center;
+    align-items: flex-end;
+    padding: 0.5rem 2rem 2rem;
+    min-height: 180px;
+}
+
+.my-hand {
+    display: flex;
+    justify-content: center;
+    perspective: 1000px;
+}
+
+.my-hand .playing-card {
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.my-hand .playing-card:hover {
+    box-shadow: 0 -5px 25px rgba(99, 102, 241, 0.3), 0 10px 15px rgba(0, 0, 0, 0.3);
+}

@@ -27,9 +27,9 @@ impl Lobby {
         // so we don't have to wait for 4 real players to test the game.
         let matched = vec![
             user_id.clone(),
-            format!("bot_easy_{}", user_id),
-            format!("bot_medium_{}", user_id),
-            format!("bot_hard_{}", user_id),
+            "bot_easy".to_string(),
+            "bot_medium".to_string(),
+            "bot_hard".to_string(),
         ];
 
         Some(matched)

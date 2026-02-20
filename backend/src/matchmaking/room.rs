@@ -138,16 +138,23 @@ impl Room {
 
         let top_discard = self.game_state.discard_pile.last().cloned();
 
-        let msg = ServerMessage::GameStateUpdate {
-            players: sanitized_players,
-            current_round_index: self.game_state.round_index,
-            current_turn_index: self.game_state.current_turn,
-            discard_pile_top: top_discard,
-            is_game_over: self.game_state.is_game_over,
-        };
+        for (user_id, sender) in &self.player_channels {
+            // Find this specific user's hand, default to empty if not found somehow
+            let my_hand = self.game_state.players.iter()
+                .find(|p| &p.id == user_id)
+                .map(|p| p.hand.clone())
+                .unwrap_or_default();
 
-        for sender in self.player_channels.values() {
-            let _ = sender.send(msg.clone()).await;
+            let msg = ServerMessage::GameStateUpdate {
+                my_hand,
+                players: sanitized_players.clone(),
+                current_round_index: self.game_state.round_index,
+                current_turn_index: self.game_state.current_turn,
+                discard_pile_top: top_discard.clone(),
+                is_game_over: self.game_state.is_game_over,
+            };
+
+            let _ = sender.send(msg).await;
         }
     }
 }

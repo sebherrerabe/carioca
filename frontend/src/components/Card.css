@@ -1,0 +1,118 @@
+.playing-card {
+    width: 100px;
+    height: 140px;
+    background-color: white;
+    border-radius: 8px;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.4), 0 2px 4px -1px rgba(0, 0, 0, 0.2);
+    position: relative;
+    user-select: none;
+    cursor: grab;
+    display: flex;
+    flex-direction: column;
+    padding: 8px;
+    box-sizing: border-box;
+    font-family: 'Inter', sans-serif;
+    transition: box-shadow 0.2s;
+    border: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.playing-card:active {
+    cursor: grabbing;
+}
+
+.red-suit {
+    color: #e53935;
+}
+
+.black-suit {
+    color: #212121;
+}
+
+.card-corner {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    position: absolute;
+    line-height: 1;
+}
+
+.card-corner.top-left {
+    top: 6px;
+    left: 6px;
+}
+
+.card-corner.bottom-right {
+    bottom: 6px;
+    right: 6px;
+    transform: rotate(180deg);
+}
+
+.card-value {
+    font-size: 1.25rem;
+    font-weight: 700;
+    letter-spacing: -1px;
+}
+
+.card-suit {
+    font-size: 1.1rem;
+    margin-top: -2px;
+}
+
+.card-center {
+    flex: 1;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.card-suit-large {
+    font-size: 3rem;
+    opacity: 0.8;
+}
+
+.card-joker-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: #9c27b0;
+}
+
+.joker-text {
+    font-weight: 800;
+    font-size: 1.1rem;
+    letter-spacing: 2px;
+    writing-mode: vertical-rl;
+    text-orientation: upright;
+}
+
+.joker-icon {
+    font-size: 2rem;
+    margin-top: 8px;
+}
+
+/* Back of the card */
+.card-back {
+    background-color: #1e3a8a;
+    /* Deep blue */
+    padding: 6px;
+    cursor: default;
+}
+
+.card-pattern {
+    width: 100%;
+    height: 100%;
+    border-radius: 4px;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    background-image: repeating-linear-gradient(45deg,
+            rgba(255, 255, 255, 0.1) 0px,
+            rgba(255, 255, 255, 0.1) 4px,
+            transparent 4px,
+            transparent 8px),
+        repeating-linear-gradient(-45deg,
+            rgba(255, 255, 255, 0.1) 0px,
+            rgba(255, 255, 255, 0.1) 4px,
+            transparent 4px,
+            transparent 8px);
+}

@@ -46,63 +46,82 @@ pub async fn ws_handler(
 async fn handle_socket(socket: WebSocket, state: Arc<AppState>, user_id: String) {
     let (mut sender, mut receiver) = socket.split();
 
-    // 1. Join Lobby
+    // Create an mpsc channel to receive ServerMessages from the Room Actor (and other places)
+    // to forward down the WebSocket to the client.
+    let (client_tx, mut client_rx) = tokio::sync::mpsc::channel::<crate::api::events::ServerMessage>(100);
+
+    // Spawn a task to handle outbound messages to the client
+    let mut send_task = tokio::spawn(async move {
+        while let Some(msg) = client_rx.recv().await {
+            if let Ok(text) = serde_json::to_string(&msg) {
+                if sender.send(Message::Text(text.into())).await.is_err() {
+                    break;
+                }
+            }
+        }
+    });
+
     println!("User {} connecting to Lobby...", user_id);
     let matched_players = state.lobby.join(user_id.clone()).await;
 
-    // Default room_id if we don't start one
     let mut current_room_id: Option<String> = None;
 
     if let Some(players) = matched_players {
         println!("Match found! Players: {:?}", players);
         
-        // Match found! Let's instantiate a Room
         let room_id = uuid::Uuid::new_v4().to_string();
         
         let (tx, rx) = tokio::sync::mpsc::channel(100);
         let room = crate::matchmaking::room::Room::new(room_id.clone(), players.clone(), rx, tx.clone());
         
-        // Spawn the room actor
         tokio::spawn(async move {
             room.run().await;
         });
 
-        // Register room in AppState
         state.active_rooms.lock().await.insert(room_id.clone(), tx.clone());
         
-        // Note: For MVP we should probably broadcast to ALL players in the room, 
-        // but right now we only have the WebSocket sender for the *current* user who triggered the match.
-        // A complete implementation would store player WS senders in the Lobby or a central registry.
-        // For now, let's just tell this user.
-        let _ = sender.send(Message::Text(format!("Match found! Room: {}", room_id).into())).await;
+        // Notify the client that a match was found securely
+        let _ = client_tx.send(crate::api::events::ServerMessage::MatchFound {
+            room_id: room_id.clone(),
+            players: players.clone(),
+        }).await;
+        
+        // Now crucially, register this player's channel with the new room so it receives GameStateUpdates!
+        let _ = tx.send(crate::matchmaking::room::RoomEvent::PlayerJoined(user_id.clone(), client_tx.clone())).await;
+
         current_room_id = Some(room_id);
-    } else {
-        let _ = sender.send(Message::Text("Waiting for match...".into())).await;
     }
 
-    // 2. Listen for messages
-    while let Some(msg) = receiver.next().await {
-        if let Ok(msg) = msg {
-            if let Message::Text(text) = msg {
-                // Try parse as ClientMessage
+    // Spawn a task to handle inbound messages from the client
+    let inbound_user_id = user_id.clone();
+    let inbound_state = state.clone();
+    let inbound_room_id = current_room_id.clone();
+    
+    let mut recv_task = tokio::spawn(async move {
+        while let Some(msg) = receiver.next().await {
+            if let Ok(Message::Text(text)) = msg {
                 if let Ok(action) = serde_json::from_str::<crate::api::events::ClientMessage>(&text) {
-                    if let Some(room_id) = &current_room_id {
-                        if let Some(room_tx) = state.active_rooms.lock().await.get(room_id) {
-                            let _ = room_tx.send(crate::matchmaking::room::RoomEvent::PlayerAction(user_id.clone(), action)).await;
+                    if let Some(room_id) = &inbound_room_id {
+                        if let Some(room_tx) = inbound_state.active_rooms.lock().await.get(room_id) {
+                            let _ = room_tx.send(crate::matchmaking::room::RoomEvent::PlayerAction(inbound_user_id.clone(), action)).await;
                         }
                     }
                 }
+            } else {
+                break; // Connection lost or non-text message
             }
-        } else {
-            break;
         }
-    }
+    });
 
-    // 3. User disconnected
+    // Run until either task ends
+    tokio::select! {
+        _ = (&mut send_task) => recv_task.abort(),
+        _ = (&mut recv_task) => send_task.abort(),
+    };
+
     println!("User {} disconnected.", user_id);
     state.lobby.leave(&user_id).await;
     
-    // Also leave room if in one
     if let Some(room_id) = current_room_id {
         if let Some(room_tx) = state.active_rooms.lock().await.get(&room_id) {
             let _ = room_tx.send(crate::matchmaking::room::RoomEvent::PlayerLeft(user_id.clone())).await;

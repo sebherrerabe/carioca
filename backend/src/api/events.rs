@@ -23,6 +23,8 @@ pub enum ServerMessage {
         players: Vec<String>,
     },
     GameStateUpdate {
+        // The array of cards belonging to the player receiving this message
+        my_hand: Vec<Card>,
         // We send a sanitized state (hiding other players' hands)
         players: Vec<SanitizedPlayerState>,
         current_round_index: usize,

@@ -1,0 +1,142 @@
+/* Sorting Zone — "Mesa de trabajo" */
+.sorting-zone {
+    flex: 0 0 280px;
+    display: flex;
+    flex-direction: column;
+    background: rgba(0, 0, 0, 0.3);
+    border: 2px dashed rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    padding: 0.5rem;
+    min-height: 100px;
+    max-height: 100%;
+    overflow-y: auto;
+    overflow-x: hidden;
+    transition: border-color 0.2s, background 0.2s;
+}
+
+.sorting-zone.drop-active {
+    border-color: var(--color-primary-main);
+    background: rgba(99, 102, 241, 0.08);
+}
+
+.sorting-zone-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.25rem 0.25rem 0.4rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.5);
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    flex-shrink: 0;
+}
+
+.sorting-zone-empty {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: rgba(255, 255, 255, 0.2);
+    font-size: 0.8rem;
+    font-style: italic;
+    text-align: center;
+    padding: 1rem;
+}
+
+.sorting-zone-cards {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2px;
+    align-items: flex-start;
+    padding: 0.25rem 0;
+    min-height: 80px;
+}
+
+.sorting-zone-card-wrapper {
+    position: relative;
+    cursor: grab;
+    transition: transform 0.15s ease;
+}
+
+.sorting-zone-card-wrapper:active {
+    cursor: grabbing;
+}
+
+.sorting-zone-card-wrapper:hover {
+    transform: translateY(-4px);
+    z-index: 10;
+}
+
+/* Combo Highlight Borders */
+.combo-group-wrapper {
+    display: flex;
+    position: relative;
+    margin-right: 6px;
+    margin-bottom: 4px;
+}
+
+.combo-group-wrapper.trio {
+    background: rgba(16, 185, 129, 0.12);
+    border: 1.5px solid rgba(16, 185, 129, 0.5);
+    border-radius: 8px;
+    padding: 3px;
+    box-shadow: 0 0 8px rgba(16, 185, 129, 0.15);
+}
+
+.combo-group-wrapper.escala {
+    background: rgba(99, 102, 241, 0.12);
+    border: 1.5px solid rgba(99, 102, 241, 0.5);
+    border-radius: 8px;
+    padding: 3px;
+    box-shadow: 0 0 8px rgba(99, 102, 241, 0.15);
+}
+
+.combo-group-wrapper .combo-label {
+    position: absolute;
+    top: -10px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 0.55rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    padding: 0 4px;
+    border-radius: 3px;
+    white-space: nowrap;
+    z-index: 5;
+}
+
+.combo-group-wrapper.trio .combo-label {
+    background: rgba(16, 185, 129, 0.9);
+    color: white;
+}
+
+.combo-group-wrapper.escala .combo-label {
+    background: rgba(99, 102, 241, 0.9);
+    color: white;
+}
+
+/* Back-to-hand button on sorting zone cards */
+.sorting-card-return-btn {
+    position: absolute;
+    top: -4px;
+    right: -4px;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: rgba(225, 29, 72, 0.9);
+    border: none;
+    color: white;
+    font-size: 0.5rem;
+    cursor: pointer;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 20;
+    line-height: 1;
+}
+
+.sorting-zone-card-wrapper:hover .sorting-card-return-btn {
+    display: flex;
+}

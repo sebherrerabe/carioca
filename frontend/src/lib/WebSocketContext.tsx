@@ -22,6 +22,8 @@ export interface GameState {
     current_turn_index: number;
     discard_pile_top: CardData | null;
     is_game_over: boolean;
+    required_trios: number;
+    required_escalas: number;
 }
 
 type ServerMessage =

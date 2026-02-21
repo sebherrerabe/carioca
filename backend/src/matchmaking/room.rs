@@ -44,8 +44,10 @@ impl Room {
     pub async fn run(mut self) {
         println!("Room {} started with players {:?}", self.id, self.players);
 
+        let mut bot_action_pending = false;
+
         // Trigger bot turn if the first player happens to be a bot
-        self.check_bot_turn();
+        self.check_bot_turn(&mut bot_action_pending);
 
         while let Some(event) = self.receiver.recv().await {
             match event {
@@ -60,23 +62,32 @@ impl Room {
                     // For MVP maybe just end game or pause
                 }
                 RoomEvent::PlayerAction(user_id, action) => {
+                    if user_id.starts_with("bot_") {
+                        bot_action_pending = false;
+                    }
                     self.handle_action(user_id, action).await;
                     self.broadcast_state().await;
                 }
             }
 
             // Check if it's a bot's turn to play
-            self.check_bot_turn();
+            self.check_bot_turn(&mut bot_action_pending);
         }
 
         println!("Room {} loop ended", self.id);
     }
 
-    fn check_bot_turn(&self) {
+    fn check_bot_turn(&self, bot_action_pending: &mut bool) {
+        if *bot_action_pending {
+            return;
+        }
+
         let current_player_index = self.game_state.current_turn;
         if let Some(user_id) = self.players.get(current_player_index)
             && user_id.starts_with("bot_")
         {
+            *bot_action_pending = true;
+
             let diff = if user_id.contains("hard") {
                 crate::engine::bot::BotDifficulty::Hard
             } else if user_id.contains("medium") {
@@ -130,7 +141,13 @@ impl Room {
             }
             ClientMessage::ReorderHand { payload } => {
                 if let Err(e) = self.game_state.reorder_hand(&user_id, payload.hand) {
+                    println!(
+                        "[Room {}] Rejected reorder from {}: {}",
+                        self.id, user_id, e
+                    );
                     self.send_error(&user_id, e).await;
+                    // Forcefully resync the offending client with the source of truth
+                    self.send_state_to_user(&user_id).await;
                 }
             }
         }
@@ -146,7 +163,18 @@ impl Room {
         }
     }
 
-    async fn broadcast_state(&self) {
+    async fn send_state_to_user(&self, user_id: &str) {
+        if let Some((_, msg)) = self.build_state_message_for_user(user_id)
+            && let Some(sender) = self.player_channels.get(user_id)
+        {
+            let _ = sender.send(msg).await;
+        }
+    }
+
+    fn build_state_message_for_user(
+        &self,
+        target_user_id: &str,
+    ) -> Option<(String, ServerMessage)> {
         let sanitized_players: Vec<SanitizedPlayerState> = self
             .game_state
             .players
@@ -156,27 +184,32 @@ impl Room {
 
         let top_discard = self.game_state.discard_pile.last().cloned();
 
-        for (user_id, sender) in &self.player_channels {
-            // Find this specific user's hand, default to empty if not found somehow
-            let my_hand = self
-                .game_state
-                .players
-                .iter()
-                .find(|p| &p.id == user_id)
-                .map(|p| p.hand.clone())
-                .unwrap_or_default();
+        let my_hand = self
+            .game_state
+            .players
+            .iter()
+            .find(|p| p.id == target_user_id)
+            .map(|p| p.hand.clone())
+            .unwrap_or_default();
 
-            let msg = ServerMessage::GameStateUpdate {
-                my_hand,
-                players: sanitized_players.clone(),
-                current_round_index: self.game_state.round_index,
-                current_round_rules: self.game_state.current_round.description().to_string(),
-                current_turn_index: self.game_state.current_turn,
-                discard_pile_top: top_discard,
-                is_game_over: self.game_state.is_game_over,
-            };
+        let msg = ServerMessage::GameStateUpdate {
+            my_hand,
+            players: sanitized_players,
+            current_round_index: self.game_state.round_index,
+            current_round_rules: self.game_state.current_round.description().to_string(),
+            current_turn_index: self.game_state.current_turn,
+            discard_pile_top: top_discard,
+            is_game_over: self.game_state.is_game_over,
+            required_trios: self.game_state.current_round.get_requirements().0,
+            required_escalas: self.game_state.current_round.get_requirements().1,
+        };
 
-            let _ = sender.send(msg).await;
+        Some((target_user_id.to_string(), msg))
+    }
+
+    async fn broadcast_state(&self) {
+        for user_id in self.player_channels.keys() {
+            self.send_state_to_user(user_id).await;
         }
     }
 }

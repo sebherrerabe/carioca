@@ -119,17 +119,16 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>, user_id: String)
             if let Ok(Message::Text(text)) = msg {
                 match serde_json::from_str::<crate::api::events::ClientMessage>(&text) {
                     Ok(action) => {
-                        if let Some(room_id) = &inbound_room_id {
-                            if let Some(room_tx) =
+                        if let Some(room_id) = &inbound_room_id
+                            && let Some(room_tx) =
                                 inbound_state.active_rooms.lock().await.get(room_id)
-                            {
-                                let _ = room_tx
-                                    .send(crate::matchmaking::room::RoomEvent::PlayerAction(
-                                        inbound_user_id.clone(),
-                                        action,
-                                    ))
-                                    .await;
-                            }
+                        {
+                            let _ = room_tx
+                                .send(crate::matchmaking::room::RoomEvent::PlayerAction(
+                                    inbound_user_id.clone(),
+                                    action,
+                                ))
+                                .await;
                         }
                     }
                     Err(e) => {

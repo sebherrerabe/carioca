@@ -48,6 +48,9 @@ pub enum ServerMessage {
         current_turn_index: usize,
         discard_pile_top: Option<Card>,
         is_game_over: bool,
+        // Structured round requirements for frontend combo validation
+        required_trios: usize,
+        required_escalas: usize,
     },
 }
 

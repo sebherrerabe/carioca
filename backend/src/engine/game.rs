@@ -371,10 +371,10 @@ fn is_valid_escala(combo: &[Card]) -> bool {
         match card {
             Card::Standard { value, .. } => {
                 let val_int = *value as i32;
-                if let Some(exp) = expected_value_int {
-                    if val_int != exp {
-                        return false; // Out of sequence
-                    }
+                if let Some(exp) = expected_value_int
+                    && val_int != exp
+                {
+                    return false; // Out of sequence
                 }
                 expected_value_int = Some(val_int + 1);
             }
@@ -399,28 +399,28 @@ fn is_valid_escala(combo: &[Card]) -> bool {
     // 1. Find the first Standard card to anchor the sequence.
     let first_std_idx = combo.iter().position(|c| !c.is_joker());
 
-    if let Some(idx) = first_std_idx {
-        if let Card::Standard { value, .. } = &combo[idx] {
-            let anchor_val = *value as i32;
-            let mut expected_val = anchor_val - (idx as i32);
+    if let Some(idx) = first_std_idx
+        && let Card::Standard { value, .. } = &combo[idx]
+    {
+        let anchor_val = *value as i32;
+        let mut expected_val = anchor_val - (idx as i32);
 
-            for card in combo {
-                match card {
-                    Card::Standard { value: cv, .. } => {
-                        if (*cv as i32) != expected_val {
-                            return false;
-                        }
-                    }
-                    Card::Joker => {
-                        // Takes the place of expected_val natively
+        for card in combo {
+            match card {
+                Card::Standard { value: cv, .. } => {
+                    if (*cv as i32) != expected_val {
+                        return false;
                     }
                 }
-                expected_val += 1;
-
-                // If sequence exceeds Ace (14), it's invalid unless bridging K-A-2 (which we ignore logic-wise for MVP)
-                if expected_val > 15 {
-                    return false;
+                Card::Joker => {
+                    // Takes the place of expected_val natively
                 }
+            }
+            expected_val += 1;
+
+            // If sequence exceeds Ace (14), it's invalid unless bridging K-A-2 (which we ignore logic-wise for MVP)
+            if expected_val > 15 {
+                return false;
             }
         }
     }

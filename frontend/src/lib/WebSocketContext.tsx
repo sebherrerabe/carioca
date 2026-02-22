@@ -12,6 +12,7 @@ interface PlayerState {
     points: number;
     dropped_combinations: CardData[][];
     turns_played: number;
+    dropped_hand_this_turn: boolean;
 }
 
 export interface GameState {

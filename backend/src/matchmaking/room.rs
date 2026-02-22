@@ -139,6 +139,16 @@ impl Room {
                     self.send_error(&user_id, e).await;
                 }
             }
+            ClientMessage::ShedCard { payload } => {
+                if let Err(e) = self.game_state.shed_card(
+                    &user_id,
+                    payload.hand_card_index,
+                    &payload.target_player_id,
+                    payload.target_combo_idx,
+                ) {
+                    self.send_error(&user_id, e).await;
+                }
+            }
             ClientMessage::ReorderHand { payload } => {
                 if let Err(e) = self.game_state.reorder_hand(&user_id, payload.hand) {
                     println!(

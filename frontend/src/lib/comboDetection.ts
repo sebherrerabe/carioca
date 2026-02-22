@@ -216,39 +216,34 @@ export function detectCombos(cards: CardData[]): DetectedCombo[] {
     const combos: DetectedCombo[] = [];
     const used = new Set<number>();
 
-    // Strategy: try longest windows first, mark used indices
-    // Pass 1: Escalas (need 4+ cards, so check longest first)
-    for (let len = cards.length; len >= 4; len--) {
-        for (let start = 0; start <= cards.length - len; start++) {
-            // Skip if any index in range already used
-            let anyUsed = false;
-            for (let i = start; i < start + len; i++) {
-                if (used.has(i)) { anyUsed = true; break; }
-            }
-            if (anyUsed) continue;
+    // Strategy: detect exact-size combos for bajada (trios=3, escalas=4)
+    // Pass 1: Escalas (exactly 4 consecutive same-suit cards)
+    for (let start = 0; start <= cards.length - 4; start++) {
+        let anyUsed = false;
+        for (let i = start; i < start + 4; i++) {
+            if (used.has(i)) { anyUsed = true; break; }
+        }
+        if (anyUsed) continue;
 
-            const window = cards.slice(start, start + len);
-            if (isValidEscala(window)) {
-                combos.push({ type: 'escala', startIndex: start, endIndex: start + len - 1 });
-                for (let i = start; i < start + len; i++) used.add(i);
-            }
+        const window = cards.slice(start, start + 4);
+        if (isValidEscala(window)) {
+            combos.push({ type: 'escala', startIndex: start, endIndex: start + 3 });
+            for (let i = start; i < start + 4; i++) used.add(i);
         }
     }
 
-    // Pass 2: Trios (need 3+ cards)
-    for (let len = cards.length; len >= 3; len--) {
-        for (let start = 0; start <= cards.length - len; start++) {
-            let anyUsed = false;
-            for (let i = start; i < start + len; i++) {
-                if (used.has(i)) { anyUsed = true; break; }
-            }
-            if (anyUsed) continue;
+    // Pass 2: Trios (exactly 3 same-value cards)
+    for (let start = 0; start <= cards.length - 3; start++) {
+        let anyUsed = false;
+        for (let i = start; i < start + 3; i++) {
+            if (used.has(i)) { anyUsed = true; break; }
+        }
+        if (anyUsed) continue;
 
-            const window = cards.slice(start, start + len);
-            if (isValidTrio(window)) {
-                combos.push({ type: 'trio', startIndex: start, endIndex: start + len - 1 });
-                for (let i = start; i < start + len; i++) used.add(i);
-            }
+        const window = cards.slice(start, start + 3);
+        if (isValidTrio(window)) {
+            combos.push({ type: 'trio', startIndex: start, endIndex: start + 2 });
+            for (let i = start; i < start + 3; i++) used.add(i);
         }
     }
 

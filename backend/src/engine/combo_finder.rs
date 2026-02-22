@@ -78,11 +78,13 @@ pub fn find_all_trio_candidates(hand: &[Card]) -> Vec<MeldCandidate> {
     for indices in by_value.values() {
         let n = indices.len();
 
-        // Generate all subsets of size 3..=n (pure standard card trios)
-        for start in 0..n {
-            for end in (start + 3)..=n {
-                let subset: Vec<usize> = indices[start..end].to_vec();
-                candidates.push(MeldCandidate::new(MeldType::Trio, subset));
+        // Generate all subsets of exactly size 3 (trios must be exactly 3 cards at bajada time)
+        for i in 0..n {
+            for j in (i + 1)..n {
+                for k in (j + 1)..n {
+                    let subset = vec![indices[i], indices[j], indices[k]];
+                    candidates.push(MeldCandidate::new(MeldType::Trio, subset));
+                }
             }
         }
 
@@ -204,7 +206,8 @@ pub fn find_all_escala_candidates(hand: &[Card]) -> Vec<MeldCandidate> {
     candidates
 }
 
-/// Emits all sub-run windows of length >= 4 ending at the last element of `indices`.
+/// Emits all sub-run windows of exactly length 4 from `indices`.
+/// Escalas must be exactly 4 cards at bajada time; extensions happen via shedding.
 fn emit_subruns(
     indices: &[usize],
     meld_type: MeldType,
@@ -212,17 +215,14 @@ fn emit_subruns(
     out: &mut Vec<MeldCandidate>,
 ) {
     let len = indices.len();
-    // Try all starting positions that still leave >= 4 cards to the end
+    // Emit all windows of exactly 4 cards
     for start in 0..=(len.saturating_sub(4)) {
-        let sub = &indices[start..];
-        if sub.len() < 4 {
-            break;
-        }
+        let sub = &indices[start..start + 4];
         // Validate joker appears at most once in this sub-window
         if let Some(j) = joker_slot {
             let joker_count = sub.iter().filter(|&&x| x == *j).count();
             if joker_count > 1 {
-                continue; // shouldn't happen, but guard
+                continue;
             }
         }
         out.push(MeldCandidate::new(meld_type, sub.to_vec()));

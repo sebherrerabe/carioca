@@ -79,6 +79,8 @@ pub struct PlayerState {
     pub has_dropped_hand: bool, // "bajado"
     pub dropped_combinations: Vec<Vec<Card>>,
     pub turns_played: u32, // How many full turns (draw+discard) this player has completed this round
+    pub has_drawn_this_turn: bool,
+    pub dropped_hand_this_turn: bool,
 }
 
 impl GameState {
@@ -92,6 +94,8 @@ impl GameState {
                 has_dropped_hand: false,
                 dropped_combinations: Vec::new(),
                 turns_played: 0,
+                has_drawn_this_turn: false,
+                dropped_hand_this_turn: false,
             })
             .collect();
 
@@ -116,6 +120,8 @@ impl GameState {
             player.has_dropped_hand = false;
             player.dropped_combinations.clear();
             player.turns_played = 0;
+            player.has_drawn_this_turn = false;
+            player.dropped_hand_this_turn = false;
             // Deal 12 cards to each player
             for _ in 0..12 {
                 if let Some(card) = self.deck.draw() {
@@ -142,7 +148,12 @@ impl GameState {
 
         let card = self.deck.draw().ok_or("Deck is empty")?;
         let player = self.current_player().ok_or("Invalid turn")?;
+        if player.has_drawn_this_turn {
+            return Err("You have already drawn a card this turn");
+        }
+
         player.hand.push(card);
+        player.has_drawn_this_turn = true;
         Ok(())
     }
 
@@ -153,13 +164,13 @@ impl GameState {
 
         let idx = self.current_turn;
 
+        let player = self.players.get_mut(idx).ok_or("Invalid turn")?;
+        if player.has_drawn_this_turn {
+            return Err("You have already drawn a card this turn");
+        }
+
         // Rule: "Si un jugador se baja no puede recoger desde el mazo de descarte"
-        let has_dropped = self
-            .players
-            .get(idx)
-            .ok_or("Invalid turn")?
-            .has_dropped_hand;
-        if has_dropped {
+        if player.has_dropped_hand {
             return Err("Cannot draw from discard after dropping hand");
         }
 
@@ -167,6 +178,7 @@ impl GameState {
 
         // Re-borrow mutably after the discard pile borrow is done
         self.players[idx].hand.push(card);
+        self.players[idx].has_drawn_this_turn = true;
         Ok(())
     }
 
@@ -179,6 +191,10 @@ impl GameState {
 
         let player = self.players.get_mut(idx).ok_or("Invalid turn")?;
 
+        if !player.has_drawn_this_turn {
+            return Err("You must draw a card before discarding");
+        }
+
         if card_index >= player.hand.len() {
             return Err("Card index out of bounds");
         }
@@ -188,8 +204,9 @@ impl GameState {
 
         self.discard_pile.push(card);
 
-        // Increment turns played for this player
         self.players[idx].turns_played += 1;
+        self.players[idx].has_drawn_this_turn = false;
+        self.players[idx].dropped_hand_this_turn = false;
 
         // Check if player won the round (no cards left)
         if hand_is_empty {
@@ -199,6 +216,8 @@ impl GameState {
 
         // Advance turn
         self.current_turn = (self.current_turn + 1) % self.players.len();
+        self.players[self.current_turn].has_drawn_this_turn = false;
+        self.players[self.current_turn].dropped_hand_this_turn = false;
         Ok(())
     }
 
@@ -251,6 +270,10 @@ impl GameState {
             return Err("Not your turn");
         }
 
+        if !player.has_drawn_this_turn {
+            return Err("You must draw a card before trying to drop your hand");
+        }
+
         if player.has_dropped_hand {
             return Err("Hand already dropped");
         }
@@ -274,12 +297,17 @@ impl GameState {
         let mut found_escalas = 0;
 
         for combo in &combinations {
-            if is_valid_trio(combo) {
+            // Strict size enforcement: trios must be exactly 3 cards,
+            // escalas exactly 4 cards during initial bajada.
+            // Extensions happen via shedding in subsequent turns.
+            if combo.len() == 3 && is_valid_trio(combo) {
                 found_trios += 1;
-            } else if is_valid_escala(combo) {
+            } else if combo.len() == 4 && is_valid_escala(combo) {
                 found_escalas += 1;
             } else {
-                return Err("Invalid combination format submitted");
+                return Err(
+                    "Invalid combination: trios must be exactly 3 cards, escalas exactly 4",
+                );
             }
         }
 
@@ -290,7 +318,93 @@ impl GameState {
         // Success! Remove the evaluated cards from the real hand and store the bajada
         player.hand = original_hand_copy;
         player.has_dropped_hand = true;
+        player.dropped_hand_this_turn = true;
         player.dropped_combinations = combinations;
+
+        Ok(())
+    }
+
+    /// Shed a single card from the current player's hand onto any dropped combo on the table.
+    ///
+    /// Rules enforced:
+    /// 1. It's this player's turn.
+    /// 2. The player has already dropped their hand (`has_dropped_hand == true`).
+    /// 3. The player must have completed at least one full turn since dropping
+    ///    (i.e. this is NOT the same turn as the bajada).
+    /// 4. The target player exists and has `has_dropped_hand == true`.
+    /// 5. The card is valid to shed onto the target combo (via `can_shed()`).
+    pub fn shed_card(
+        &mut self,
+        player_id: &str,
+        hand_card_index: usize,
+        target_player_id: &str,
+        target_combo_idx: usize,
+    ) -> Result<(), &'static str> {
+        if self.is_game_over {
+            return Err("Game is over");
+        }
+
+        let current_idx = self.current_turn;
+        let player = self.players.get(current_idx).ok_or("Invalid turn")?;
+
+        if player.id != player_id {
+            return Err("Not your turn");
+        }
+        if !player.has_dropped_hand {
+            return Err("You must drop your hand before shedding cards");
+        }
+        if player.dropped_hand_this_turn {
+            return Err("You cannot shed cards on the same turn you drop your hand");
+        }
+
+        if !player.has_drawn_this_turn {
+            return Err("You must draw a card before shedding cards");
+        }
+
+        // The card to shed
+        if hand_card_index >= player.hand.len() {
+            return Err("Card index out of bounds");
+        }
+        let card = player.hand[hand_card_index];
+
+        // Find target player and validate their combo
+        let target_player_pos = self
+            .players
+            .iter()
+            .position(|p| p.id == target_player_id)
+            .ok_or("Target player not found")?;
+
+        let target_player = &self.players[target_player_pos];
+        if !target_player.has_dropped_hand {
+            return Err("Target player has not dropped their hand yet");
+        }
+        if target_combo_idx >= target_player.dropped_combinations.len() {
+            return Err("Target combo index out of bounds");
+        }
+
+        // Validate the card can be shed onto this combo
+        let combo = target_player.dropped_combinations[target_combo_idx].clone();
+        let position = crate::engine::combo_finder::can_shed(&card, &combo)
+            .ok_or("This card cannot be shed onto that combo")?;
+
+        // Apply the shed: remove card from hand, insert into the target combo
+        self.players[current_idx].hand.remove(hand_card_index);
+
+        match position {
+            crate::engine::combo_finder::ShedPosition::ExtendLeft => {
+                self.players[target_player_pos].dropped_combinations[target_combo_idx]
+                    .insert(0, card);
+            }
+            crate::engine::combo_finder::ShedPosition::ExtendRight
+            | crate::engine::combo_finder::ShedPosition::TrioExtension => {
+                self.players[target_player_pos].dropped_combinations[target_combo_idx].push(card);
+            }
+        }
+
+        // Check if the current player won by emptying their hand (shed their last card)
+        if self.players[current_idx].hand.is_empty() {
+            self.end_round();
+        }
 
         Ok(())
     }
@@ -503,5 +617,154 @@ mod tests {
         assert!(game.draw_from_deck().is_ok());
         assert!(game.discard(0).is_ok());
         assert_eq!(game.current_turn, 1);
+    }
+
+    // ── Helper: build a minimal 2-player game with alice already bajado ──
+
+    fn std(suit: crate::engine::card::Suit, value: crate::engine::card::Value) -> Card {
+        Card::Standard { suit, value }
+    }
+
+    /// Sets up a 2-player game (alice=0, bob=1) where alice has already dropped
+    /// a trio of Fives and is on her second turn (turns_played > 0).
+    fn game_with_alice_bajado() -> GameState {
+        use crate::engine::card::{Suit, Value};
+        let mut game = GameState::new(vec!["alice".to_string(), "bob".to_string()]);
+        game.start_round();
+
+        // Give alice a known hand: 7♥ and a bunch of filler
+        game.players[0].hand = vec![
+            std(Suit::Hearts, Value::Seven), // idx 0 — will try to shed
+            std(Suit::Clubs, Value::Two),    // idx 1
+            std(Suit::Spades, Value::Three), // idx 2
+        ];
+
+        // Set alice as already bajado with a trio of Fives
+        game.players[0].has_dropped_hand = true;
+        game.players[0].dropped_combinations = vec![vec![
+            std(Suit::Hearts, Value::Five),
+            std(Suit::Clubs, Value::Five),
+            std(Suit::Spades, Value::Five),
+        ]];
+        game.players[0].turns_played = 1; // She's already had turns since dropping
+
+        // Give bob a bajado escala 3-4-5-6 ♦ so alice can shed onto it
+        game.players[1].has_dropped_hand = true;
+        game.players[1].dropped_combinations = vec![vec![
+            std(Suit::Diamonds, Value::Three),
+            std(Suit::Diamonds, Value::Four),
+            std(Suit::Diamonds, Value::Five),
+            std(Suit::Diamonds, Value::Six),
+        ]];
+
+        // It's alice's turn, and she has drawn a card so she can shed
+        game.current_turn = 0;
+        game.players[0].has_drawn_this_turn = true;
+        game
+    }
+
+    #[test]
+    fn shed_card_extends_own_trio() {
+        use crate::engine::card::{Suit, Value};
+        let mut game = game_with_alice_bajado();
+
+        // Add 5♦ to alice's hand
+        game.players[0].hand.push(std(Suit::Diamonds, Value::Five));
+        let five_idx = game.players[0].hand.len() - 1;
+
+        // Shed onto her own trio of Fives
+        let result = game.shed_card("alice", five_idx, "alice", 0);
+        assert!(result.is_ok(), "Should shed a matching Five onto town trio");
+
+        // Trio should now have 4 cards
+        assert_eq!(game.players[0].dropped_combinations[0].len(), 4);
+        // Hand should shrink
+        assert_eq!(game.players[0].hand.len(), 3); // was 4, now 3
+    }
+
+    #[test]
+    fn shed_card_extends_opponent_escala_right() {
+        use crate::engine::card::{Suit, Value};
+        let mut game = game_with_alice_bajado();
+
+        // 7♦ extends bob's 3-4-5-6♦ escala on the right
+        // Give alice 2 cards so she doesn't empty hand and trigger end_round()
+        game.players[0].hand = vec![
+            std(Suit::Diamonds, Value::Seven),
+            std(Suit::Clubs, Value::King),
+        ];
+        let result = game.shed_card("alice", 0, "bob", 0);
+        assert!(result.is_ok(), "Should shed 7♦ onto bob's escala");
+        assert_eq!(game.players[1].dropped_combinations[0].len(), 5);
+        // Last card should be 7♦
+        assert_eq!(
+            game.players[1].dropped_combinations[0].last().unwrap(),
+            &std(Suit::Diamonds, Value::Seven)
+        );
+    }
+
+    #[test]
+    fn shed_card_extends_opponent_escala_left() {
+        use crate::engine::card::{Suit, Value};
+        let mut game = game_with_alice_bajado();
+
+        // 2♦ extends bob's 3-4-5-6♦ escala on the left
+        // Give alice 2 cards so she doesn't empty hand and trigger end_round()
+        game.players[0].hand = vec![
+            std(Suit::Diamonds, Value::Two),
+            std(Suit::Clubs, Value::King),
+        ];
+        let result = game.shed_card("alice", 0, "bob", 0);
+        assert!(
+            result.is_ok(),
+            "Should shed 2♦ onto bob's escala on the left"
+        );
+        assert_eq!(game.players[1].dropped_combinations[0].len(), 5);
+        // First card should be 2♦
+        assert_eq!(
+            game.players[1].dropped_combinations[0].first().unwrap(),
+            &std(Suit::Diamonds, Value::Two)
+        );
+    }
+
+    #[test]
+    fn shed_card_rejected_before_bajada() {
+        use crate::engine::card::{Suit, Value};
+        let mut game = GameState::new(vec!["alice".to_string(), "bob".to_string()]);
+        game.start_round();
+        game.players[0].hand = vec![std(Suit::Diamonds, Value::Seven)];
+        game.players[0].has_dropped_hand = false; // NOT dropped yet
+        game.current_turn = 0;
+
+        // Bob must have bajado to be target
+        game.players[1].has_dropped_hand = true;
+        game.players[1].dropped_combinations = vec![vec![
+            std(Suit::Diamonds, Value::Five),
+            std(Suit::Diamonds, Value::Six),
+            std(Suit::Diamonds, Value::Eight),
+            std(Suit::Diamonds, Value::Nine),
+        ]];
+
+        let result = game.shed_card("alice", 0, "bob", 0);
+        assert!(result.is_err());
+        assert_eq!(
+            result.unwrap_err(),
+            "You must drop your hand before shedding cards"
+        );
+    }
+
+    #[test]
+    fn shed_card_rejected_for_invalid_card() {
+        use crate::engine::card::{Suit, Value};
+        let mut game = game_with_alice_bajado();
+
+        // 7♥ cannot shed onto bob's 3-4-5-6♦ escala (wrong suit)
+        game.players[0].hand = vec![std(Suit::Hearts, Value::Seven)];
+        let result = game.shed_card("alice", 0, "bob", 0);
+        assert!(result.is_err());
+        assert_eq!(
+            result.unwrap_err(),
+            "This card cannot be shed onto that combo"
+        );
     }
 }

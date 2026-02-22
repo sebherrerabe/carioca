@@ -71,6 +71,7 @@
 /* Combo Highlight Borders */
 .combo-group-wrapper {
     display: flex;
+    flex-direction: column;
     position: relative;
     margin-right: 6px;
     margin-bottom: 4px;
@@ -92,19 +93,31 @@
     box-shadow: 0 0 8px rgba(99, 102, 241, 0.15);
 }
 
-.combo-group-wrapper .combo-label {
+.combo-header-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
     position: absolute;
-    top: -10px;
+    top: -12px;
     left: 50%;
     transform: translateX(-50%);
+    z-index: 5;
+    white-space: nowrap;
+}
+
+.combo-cards-row {
+    display: flex;
+    margin-top: 2px;
+}
+
+.combo-group-wrapper .combo-label {
     font-size: 0.55rem;
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 1px;
-    padding: 0 4px;
+    padding: 2px 4px;
     border-radius: 3px;
-    white-space: nowrap;
-    z-index: 5;
 }
 
 .combo-group-wrapper.trio .combo-label {
@@ -115,6 +128,25 @@
 .combo-group-wrapper.escala .combo-label {
     background: rgba(99, 102, 241, 0.9);
     color: white;
+}
+
+.unlink-btn {
+    background: rgba(255, 255, 255, 0.9);
+    border: 1px solid rgba(0, 0, 0, 0.2);
+    cursor: pointer;
+    font-size: 0.55rem;
+    padding: 1px 3px;
+    border-radius: 3px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.2s, background 0.2s;
+    line-height: 1;
+}
+
+.unlink-btn:hover {
+    transform: scale(1.15);
+    background: #fecdd3;
 }
 
 /* Back-to-hand button on sorting zone cards */

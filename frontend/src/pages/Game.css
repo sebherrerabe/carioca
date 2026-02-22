@@ -8,26 +8,108 @@
     color: white;
 }
 
-.game-header {
-    padding: 0.75rem 2rem;
-    background: rgba(0, 0, 0, 0.6);
-    backdrop-filter: blur(10px);
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-    z-index: 10;
+/* Kebab Menu & Bajar Button */
+.game-menu-container {
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+    z-index: 1000;
 }
 
-.game-header-info {
+.kebab-btn {
+    background: rgba(0, 0, 0, 0.4);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: white;
+    font-size: 1.5rem;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    cursor: pointer;
     display: flex;
     align-items: center;
-    gap: 1rem;
+    justify-content: center;
+    backdrop-filter: blur(8px);
+    transition: all 0.2s ease;
+    line-height: 0;
+    padding-bottom: 4px;
 }
 
-.game-username {
-    color: var(--color-primary-main);
-    font-weight: 600;
+.kebab-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.2);
+}
+
+.kebab-dropdown {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    width: 200px;
+    background: #1a1a1a;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    padding: 0.5rem;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.dropdown-item {
+    padding: 0.5rem 0.75rem;
+    text-align: left;
+    color: white;
+    font-size: 0.9rem;
+    border-radius: 6px;
+}
+
+.dropdown-item.text-btn {
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    width: 100%;
+    transition: background 0.2s;
+}
+
+.dropdown-item.text-btn:hover {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.dropdown-divider {
+    height: 1px;
+    background: rgba(255, 255, 255, 0.1);
+    margin: 0.25rem 0;
+}
+
+.bajar-btn {
+    background: #10b981;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    padding: 0.75rem 1.5rem;
+    font-size: 1.1rem;
+    font-weight: 700;
+    cursor: pointer;
+    box-shadow: 0 0 15px rgba(16, 185, 129, 0.4);
+    transition: all 0.2s ease;
+    animation: pulse-button 2s infinite;
+    white-space: nowrap;
+}
+
+.bajar-btn:hover {
+    transform: translateY(-2px) scale(1.05);
+    box-shadow: 0 0 25px rgba(16, 185, 129, 0.6);
+}
+
+@keyframes pulse-button {
+
+    0%,
+    100% {
+        box-shadow: 0 0 15px rgba(16, 185, 129, 0.4);
+    }
+
+    50% {
+        box-shadow: 0 0 25px rgba(16, 185, 129, 0.8);
+    }
 }
 
 .game-badge {
@@ -72,9 +154,10 @@
 .opponents-row {
     display: flex;
     justify-content: center;
-    gap: 1.5rem;
-    padding: 0.4rem 2rem;
+    gap: clamp(0.5rem, 2vw, 1.5rem);
+    padding: 0.4rem clamp(0.5rem, 2vw, 2rem);
     flex-shrink: 0;
+    flex-wrap: wrap;
 }
 
 .opponent-slot {
@@ -87,7 +170,9 @@
     background: rgba(255, 255, 255, 0.03);
     border: 1px solid rgba(255, 255, 255, 0.06);
     transition: all 0.3s ease;
-    min-width: 100px;
+    min-width: clamp(80px, 12vw, 130px);
+    flex: 1 1 clamp(80px, 12vw, 130px);
+    max-width: 180px;
 }
 
 .opponent-slot.active-turn {
@@ -141,8 +226,8 @@
     flex: 1;
     min-height: 0;
     display: flex;
-    padding: 0 1.5rem;
-    gap: 1.5rem;
+    padding: 0 clamp(0.5rem, 2vw, 1.5rem);
+    gap: clamp(0.5rem, 1.5vw, 1.5rem);
     overflow: hidden;
 }
 
@@ -228,16 +313,16 @@
 .central-table {
     flex: 1;
     min-width: 0;
+    min-height: 0;
     display: flex;
     flex-direction: column;
-    justify-content: center;
-    align-items: center;
+    justify-content: flex-start;
+    align-items: stretch;
     border: 2px dashed rgba(255, 255, 255, 0.06);
     border-radius: 16px;
     background: rgba(255, 255, 255, 0.02);
-    padding: 1rem;
-    overflow-y: auto;
-    overflow-x: hidden;
+    padding: clamp(0.5rem, 1.5vw, 1rem);
+    overflow: hidden;
     transition: border-color 0.2s, background 0.2s, box-shadow 0.2s;
     position: relative;
 }
@@ -266,15 +351,21 @@
 }
 
 .bajada-ready-indicator {
+    position: absolute;
+    top: 0.5rem;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 5;
     background: rgba(16, 185, 129, 0.2);
     border: 1px solid rgba(16, 185, 129, 0.4);
     border-radius: 8px;
-    padding: 0.4rem 1rem;
-    font-size: 0.85rem;
+    padding: 0.3rem 1rem;
+    font-size: 0.8rem;
     font-weight: 600;
     color: rgba(16, 185, 129, 1);
-    margin-bottom: 0.75rem;
     animation: pulse 1.5s ease-in-out infinite;
+    white-space: nowrap;
+    pointer-events: none;
 }
 
 .central-table-empty {
@@ -282,57 +373,97 @@
     font-size: 0.85rem;
     font-style: italic;
     text-align: center;
-    padding: 2rem 1rem;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
-/* Dropped Bajadas — Horizontal fan layout */
+/* ─── Dropped Bajadas — Full 2D table surface ─── */
+/* Rows for each player, each spanning the full width. Combo groups are naturally
+   sized so they cluster together rather than stretching across the table. */
 .dropped-bajadas-area {
     display: flex;
-    flex-direction: column;
+    flex-direction: row;
+    flex-wrap: wrap;
     gap: 0.75rem;
     width: 100%;
-    overflow-x: auto;
-    overflow-y: hidden;
-    scrollbar-width: thin;
-    scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
+    height: 100%;
+    align-content: flex-start;
+    overflow: hidden;
+    padding: 0.25rem;
 }
 
 .player-bajada-row {
+    /* Natural height based on card content — do NOT stretch to fill.
+       Allow row to grow if contents wrap to multiple lines. */
+    flex: 0 0 auto;
     display: flex;
-    flex-direction: column;
-    gap: 0.25rem;
+    flex-direction: row;
+    align-items: flex-start;
+    /* Align top so name stays pinned if row wraps */
+    gap: 0.4rem;
+    padding: 0.4rem 0.3rem;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(255, 255, 255, 0.04);
+    max-width: 100%;
 }
 
 .player-bajada-name {
-    font-size: 0.75rem;
+    font-size: 0.65rem;
     font-weight: 600;
     color: var(--color-primary-main);
-    opacity: 0.8;
+    opacity: 0.7;
     white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    flex-shrink: 0;
+    /* Fixed narrow column for the player label */
+    width: clamp(40px, 6vw, 72px);
+    text-align: right;
+    padding-right: 0.4rem;
+    margin-top: 0.6rem;
+    /* Align with middle of first row of cards */
 }
 
 .player-bajada-groups {
     display: flex;
-    gap: 0.75rem;
+    flex-direction: row;
     flex-wrap: wrap;
-    align-items: flex-start;
+    /* CRITICAL: Allow combos to wrap to next line */
+    gap: clamp(0.5rem, 1.2vw, 1rem);
+    align-items: center;
+    justify-content: flex-start;
+    flex: 1;
+    min-width: 0;
+    /* Ensures the flex container can wrap its children before overflowing the parent */
+    padding: 0.1rem 0;
 }
 
 .player-bajada-group {
     display: flex;
-    align-items: flex-start;
-    padding: 0.3rem 0.4rem;
-    background: rgba(255, 255, 255, 0.04);
+    align-items: center;
+    flex-direction: row;
+    /* Size to card content — no flex:1 stretching */
+    flex: 0 0 auto;
+    height: clamp(68px, 8.5vw, 104px);
+    background: rgba(255, 255, 255, 0.03);
     border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: 8px;
-    flex-shrink: 0;
+    padding: 0.2rem 0.5rem 0.2rem 0.6rem;
+    position: relative;
+    overflow: visible;
+    transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
 }
 
 .bajada-card-rendered {
-    margin-left: -24px;
+    /* Classic fanned overlap — same direction, consistent */
+    margin-left: clamp(-30px, -2.8vw, -18px);
     position: relative;
     flex-shrink: 0;
-    transition: margin-left 0.2s ease;
+    transition: transform 0.15s ease;
 }
 
 .bajada-card-rendered:first-child {
@@ -341,6 +472,24 @@
 
 .bajada-card-rendered:hover {
     z-index: 10;
+    transform: translateY(-6px);
+}
+
+/* ─── Shedding affordances ─── */
+
+/* Subtle glow on all combo groups when shedding is possible */
+.player-bajada-group.shed-available {
+    border-color: rgba(99, 102, 241, 0.3);
+    transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
+}
+
+/* Strong glow when a card is dragged directly over this specific combo */
+.player-bajada-group.shed-target-active {
+    border-color: var(--color-primary-main);
+    box-shadow: 0 0 20px rgba(99, 102, 241, 0.6), inset 0 0 12px rgba(99, 102, 241, 0.15);
+    background: rgba(99, 102, 241, 0.12);
+    transform: scale(1.03);
+    transition: all 0.1s ease;
 }
 
 /* ─── Bottom Strip: Hand + Sorting Zone ─── */
@@ -349,7 +498,7 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    padding: 0.25rem 1.5rem 0.5rem;
+    padding: 0.25rem clamp(0.5rem, 2vw, 1.5rem) 0.5rem;
 }
 
 .bottom-strip-content {
@@ -411,17 +560,7 @@
     }
 }
 
-/* Not-my-turn banner */
-.not-my-turn-bar {
-    padding: 0.4rem 2rem;
-    background: rgba(225, 29, 72, 0.2);
-    border-bottom: 1px solid rgba(225, 29, 72, 0.3);
-    font-size: 0.9rem;
-    font-weight: 600;
-    color: rgba(255, 255, 255, 0.9);
-    text-align: center;
-    flex-shrink: 0;
-}
+
 
 /* Highlight action */
 .highlight-action {
@@ -440,19 +579,7 @@
     }
 }
 
-/* Rules Banner */
-.rules-banner {
-    background: rgba(255, 255, 255, 0.1);
-    padding: 0.5rem 1rem;
-    border-radius: 8px;
-    margin-right: 1rem;
-    font-size: 0.9rem;
-    font-weight: 500;
-    color: var(--color-primary-main);
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-}
+
 
 /* Scoreboard Modal */
 .scoreboard-modal-overlay {

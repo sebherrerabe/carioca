@@ -114,8 +114,19 @@ export const SortingZone = forwardRef<HTMLDivElement, SortingZoneProps>(({
                         if (group.type === 'combo' && group.combo) {
                             return (
                                 <div key={`combo-${gIdx}`} className={`combo-group-wrapper ${group.combo.type}`}>
-                                    <span className="combo-label">{group.combo.type === 'trio' ? 'Trío' : 'Escala'}</span>
-                                    {group.cards.map((item, cardIdx) => renderCard(item, group.startIndex + cardIdx))}
+                                    <div className="combo-header-row">
+                                        <span className="combo-label">{group.combo.type === 'trio' ? 'Trío' : 'Escala'}</span>
+                                        <button
+                                            className="unlink-btn"
+                                            title="Unlink combo"
+                                            onClick={() => onReorder(group.startIndex, cards.length - 1)}
+                                        >
+                                            💔
+                                        </button>
+                                    </div>
+                                    <div className="combo-cards-row">
+                                        {group.cards.map((item, cardIdx) => renderCard(item, group.startIndex + cardIdx))}
+                                    </div>
                                 </div>
                             );
                         }

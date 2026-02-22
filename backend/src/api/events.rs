@@ -10,6 +10,7 @@ pub enum ClientMessage {
     DrawFromDiscard,
     Discard { payload: DiscardPayload },
     DropHand { payload: DropHandPayload },
+    ShedCard { payload: ShedCardPayload },
     ReorderHand { payload: ReorderHandPayload },
 }
 
@@ -21,6 +22,18 @@ pub struct DiscardPayload {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DropHandPayload {
     pub combinations: Vec<Vec<Card>>,
+}
+
+/// Shed a single card from hand onto an existing table combo.
+/// The position (left/right/trio-ext) is derived server-side by `can_shed()`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ShedCardPayload {
+    /// Index into the current player's hand
+    pub hand_card_index: usize,
+    /// ID of the player whose bajada we are extending
+    pub target_player_id: String,
+    /// Index into that player's `dropped_combinations`
+    pub target_combo_idx: usize,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

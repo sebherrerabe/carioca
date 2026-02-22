@@ -14,7 +14,9 @@ const BOT_DISPLAY_NAMES: Record<string, string> = {
 };
 
 function getPlayerDisplayName(id: string): string {
-    return BOT_DISPLAY_NAMES[id] || id;
+    if (BOT_DISPLAY_NAMES[id]) return BOT_DISPLAY_NAMES[id];
+    // Truncate UUID-style IDs to first 6 chars so they fit the narrow label column
+    return id.length > 10 ? id.slice(0, 6) + '…' : id;
 }
 
 interface HandCard {
@@ -41,8 +43,10 @@ export default function Game() {
 
     // ─── State ───────────────────────────────────────────────
     const [showScoreboard, setShowScoreboard] = useState(false);
+    const [showMenu, setShowMenu] = useState(false);
     const [isDraggingOverPozo, setIsDraggingOverPozo] = useState(false);
     const [draggingCardId, setDraggingCardId] = useState<string | null>(null);
+
 
     // Local sorted hand for Framer Motion Reorder
     const [handCards, setHandCards] = useState<HandCard[]>([]);
@@ -51,8 +55,7 @@ export default function Game() {
     const [sortingZoneCards, setSortingZoneCards] = useState<SortingCard[]>([]);
     const [isSortingZoneDropActive, setIsSortingZoneDropActive] = useState(false);
 
-    // Central table drop
-    const [isTableDropActive, setIsTableDropActive] = useState(false);
+
 
     // Refs
     const pozoRef = useRef<HTMLDivElement>(null);
@@ -69,6 +72,9 @@ export default function Game() {
     const canDraw = isMyTurn && !hasDrawn;
     const isFirstTurn = (me?.turns_played ?? 0) === 0;
     const canBajar = isMyTurn && hasDrawn && !isFirstTurn && !(me?.has_dropped_hand);
+    // Can shed: must be my turn, must have already dropped hand (bajado) AND drawn a card this turn
+    // NEW: Cannot shed on the same turn you dropped your hand.
+    const canShed = isMyTurn && hasDrawn && (me?.has_dropped_hand === true) && !(me?.dropped_hand_this_turn);
 
     // Combo detection on sorting zone
     const sortingZoneCombos = useMemo(
@@ -82,26 +88,25 @@ export default function Game() {
         [handCards]
     );
 
-    // Check if bajada is complete (all required combos found across sorting zone and hand)
+    // Check if bajada is complete (must organize combos entirely in sorting zone to Bajar)
     const bajadaReady = useMemo(() => {
         if (!gameState || !canBajar) return false;
 
-        const allCombos = [...sortingZoneCombos, ...handCombos];
-
         return isBajadaComplete(
-            allCombos,
+            sortingZoneCombos,
             gameState.required_trios,
             gameState.required_escalas,
         );
-    }, [sortingZoneCombos, handCombos, gameState, canBajar]);
+    }, [sortingZoneCombos, gameState, canBajar]);
 
     // Instruction text
     const getInstruction = (): string => {
         if (!isMyTurn) return '';
         if (canDraw) return '📥 Click Mazo or Pozo to pick up a card';
         if (isFirstTurn) return '🃏 First turn — drag a card from your hand onto the Pozo to discard';
+        if (canShed) return '🃏 Drop hand — drag cards to combos on the table to shed, or drag to the Pozo to discard';
         if (me?.has_dropped_hand) return '🃏 You have dropped your hand — drag a card to the Pozo to discard';
-        if (bajadaReady) return '✅ Bajada ready! Drag your combos to the table or drag a card to the Pozo';
+        if (bajadaReady) return '✅ Bajada ready! Click the "¡Bajar!" button below your sorting zone.';
         return '🃏 Drag cards to the Mesa de trabajo to organize combos, then drag to the Pozo to discard';
     };
 
@@ -166,30 +171,36 @@ export default function Game() {
             setHandCards(newHand);
         }
 
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [gameState?.my_hand]);
 
 
-    // ─── Central Table Drop (Bajada) — defined first, referenced by handleMotionDragEnd ────
+    // ─── Bajar Button Handler ────
 
-    const handleDropOnTable = useCallback((e: React.DragEvent<HTMLDivElement> | null) => {
-        if (e) e.preventDefault();
-        setIsTableDropActive(false);
-
+    const handleBajar = useCallback(() => {
         if (!canBajar || !gameState || !bajadaReady) return;
 
         const submissionCombos: CardData[][] = [];
         sortingZoneCombos.forEach(combo => {
             submissionCombos.push(sortingZoneCards.slice(combo.startIndex, combo.endIndex + 1).map(sc => sc.card));
         });
-        handCombos.forEach(combo => {
-            submissionCombos.push(handCards.slice(combo.startIndex, combo.endIndex + 1).map(hc => hc.card));
-        });
+
         if (submissionCombos.length === 0) return;
 
         console.log('Submitting Bajada with combos:', submissionCombos);
         sendAction({ type: 'DropHand', payload: { combinations: submissionCombos } });
-        setSortingZoneCards([]);
-    }, [canBajar, gameState, bajadaReady, sortingZoneCombos, handCombos, sortingZoneCards, handCards, sendAction]);
+
+        // Bug 4 Fix: Only remove cards from sorting zone that were submitted as combos
+        const usedSortingIndices = new Set<number>();
+        sortingZoneCombos.forEach(c => {
+            for (let i = c.startIndex; i <= c.endIndex; i++) usedSortingIndices.add(i);
+        });
+
+        const newSortingZone = sortingZoneCards.filter((_, i) => !usedSortingIndices.has(i));
+        setSortingZoneCards(newSortingZone);
+    }, [canBajar, gameState, bajadaReady, sortingZoneCombos, sortingZoneCards, sendAction]);
+
+
 
     // Drag overlay card (rendered as floating clone)
     const [dragOverlayCard, setDragOverlayCard] = useState<CardData | null>(null);
@@ -218,7 +229,6 @@ export default function Game() {
         setDragOverlayCard(null);
         setIsDraggingOverPozo(false);
         setIsSortingZoneDropActive(false);
-        setIsTableDropActive(false);
 
         if (!isMyTurn || !gameState) return;
 
@@ -246,6 +256,9 @@ export default function Game() {
             if (isInsideRect(x, y, pozoRect)) {
                 const serverIdx = gameState.my_hand.findIndex(c => JSON.stringify(c) === JSON.stringify(card));
                 if (serverIdx !== -1) {
+                    // Optimistically remove to prevent ReorderHand conflict
+                    setHandCards(prev => prev.filter(c => c.id !== id));
+                    setSortingZoneCards(prev => prev.filter(c => c.id !== id));
                     sendAction({ type: 'Discard', payload: { card_index: serverIdx } });
                 }
                 return;
@@ -256,11 +269,39 @@ export default function Game() {
         if (centralTableRef.current && canBajar && bajadaReady) {
             const tableRect = centralTableRef.current.getBoundingClientRect();
             if (isInsideRect(x, y, tableRect)) {
-                handleDropOnTable(null);
+                // Drag to table disabled, must use Bajar button
                 return;
             }
         }
-    }, [isMyTurn, hasDrawn, gameState, sendAction, handCards, canBajar, bajadaReady, handleDropOnTable]);
+
+        // Shed: drop a card onto an existing bajada group
+        if (canShed) {
+            const elements = document.elementsFromPoint(x, y);
+            const shedTarget = elements.find(el => el.hasAttribute('data-shed-player'));
+            if (shedTarget) {
+                const targetPlayerId = shedTarget.getAttribute('data-shed-player')!;
+                const targetComboIdx = parseInt(shedTarget.getAttribute('data-shed-combo')!, 10);
+                const handIndex = gameState.my_hand.findIndex(
+                    c => JSON.stringify(c) === JSON.stringify(card)
+                );
+                if (handIndex !== -1) {
+                    console.log(`🃏 Shedding card at index ${handIndex} onto ${targetPlayerId} combo ${targetComboIdx}`);
+                    // Optimistically remove to prevent ReorderHand conflict
+                    setHandCards(prev => prev.filter(c => c.id !== id));
+                    setSortingZoneCards(prev => prev.filter(c => c.id !== id));
+                    sendAction({
+                        type: 'ShedCard',
+                        payload: {
+                            hand_card_index: handIndex,
+                            target_player_id: targetPlayerId,
+                            target_combo_idx: targetComboIdx,
+                        },
+                    });
+                }
+                return;
+            }
+        }
+    }, [isMyTurn, hasDrawn, gameState, sendAction, handCards, canBajar, canShed, bajadaReady]);
 
     // Persist hand order to server
     useEffect(() => {
@@ -278,6 +319,7 @@ export default function Game() {
         if (sameContent && serverCardsStr !== localCardsStr && !draggingCardId) {
             sendAction({ type: 'ReorderHand', payload: { hand: allLocalCards } });
         }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [handCards, sortingZoneCards, draggingCardId, isMyTurn, gameState?.my_hand, sendAction]);
 
     // Pointer move for hover detection (Pozo + Sorting Zone + Central Table)
@@ -291,11 +333,7 @@ export default function Game() {
             const rect = sortingZoneRef.current.getBoundingClientRect();
             setIsSortingZoneDropActive(isInsideRect(e.clientX, e.clientY, rect));
         }
-        if (centralTableRef.current && canBajar && bajadaReady) {
-            const rect = centralTableRef.current.getBoundingClientRect();
-            setIsTableDropActive(isInsideRect(e.clientX, e.clientY, rect));
-        }
-    }, [draggingCardId, canBajar, bajadaReady]);
+    }, [draggingCardId]);
 
     // ─── Sorting Zone Handlers ───────────────────────────────
 
@@ -336,19 +374,24 @@ export default function Game() {
 
     return (
         <div className="game-container" onPointerMove={handlePointerMove}>
-            {/* Header */}
-            <header className="game-header">
-                <h2 style={{ margin: 0, fontSize: '1.2rem' }}>🃏 Carioca</h2>
-                <div className="game-header-info">
-                    <span className="game-username">{username}</span>
-                    <div className="rules-banner">
-                        <span style={{ opacity: 0.7 }}>Round {gameState.current_round_index + 1}:</span>
-                        <span>{gameState.current_round_rules}</span>
+            {/* Kebab Menu */}
+            <div className="game-menu-container">
+                <button className="kebab-btn" onClick={() => setShowMenu(!showMenu)}>⋮</button>
+                {showMenu && (
+                    <div className="kebab-dropdown">
+                        <div className="dropdown-item user-info">👤 <b>{username}</b></div>
+                        <div className="dropdown-divider"></div>
+                        <div className="dropdown-item round-info">
+                            <span style={{ opacity: 0.7 }}>Round {gameState.current_round_index + 1}:</span>
+                            <br />
+                            <span style={{ fontSize: '0.8rem' }}>{gameState.current_round_rules}</span>
+                        </div>
+                        <div className="dropdown-divider"></div>
+                        <button className="dropdown-item text-btn" onClick={() => { setShowScoreboard(true); setShowMenu(false); }}>🏆 Scoreboard</button>
+                        <button className="dropdown-item text-btn" style={{ color: '#ef4444' }} onClick={handleQuit}>🚪 Quit Match</button>
                     </div>
-                    <button onClick={() => setShowScoreboard(true)} className="btn btn-secondary" style={{ padding: '0.4rem 1rem', fontSize: '0.85rem' }}>Scoreboard</button>
-                    <button onClick={handleQuit} className="btn btn-secondary" style={{ padding: '0.4rem 1rem', fontSize: '0.85rem' }}>Quit</button>
-                </div>
-            </header>
+                )}
+            </div>
 
             {/* Server Error Banner */}
             {error && (
@@ -361,13 +404,6 @@ export default function Game() {
             {isMyTurn && (
                 <div className="instruction-bar">
                     <span>{getInstruction()}</span>
-                </div>
-            )}
-
-            {/* Not-my-turn Banner */}
-            {!isMyTurn && (
-                <div className="not-my-turn-bar">
-                    ⚠ Not your turn
                 </div>
             )}
 
@@ -468,23 +504,11 @@ export default function Game() {
                         </div>
                     </div>
 
-                    {/* Central Table — bajadas + drop target */}
+                    {/* Central Table — bajadas */}
                     <div
                         ref={centralTableRef}
-                        className={`central-table ${isTableDropActive ? 'drop-active' : ''} ${bajadaReady ? 'bajada-ready' : ''}`}
-                        onDragOver={(e) => {
-                            e.preventDefault();
-                            if (canBajar && bajadaReady) setIsTableDropActive(true);
-                        }}
-                        onDragLeave={() => setIsTableDropActive(false)}
-                        onDrop={handleDropOnTable}
+                        className={`central-table`}
                     >
-                        {/* Bajada ready indicator */}
-                        {bajadaReady && (
-                            <div className="bajada-ready-indicator">
-                                ✅ Bajada ready — drag a combo here to drop!
-                            </div>
-                        )}
 
                         {/* All players' bajadas */}
                         <div className="dropped-bajadas-area">
@@ -493,11 +517,16 @@ export default function Game() {
                                     <span className="player-bajada-name">{getPlayerDisplayName(player.id)}{player.id === userId ? ' (You)' : ''}</span>
                                     <div className="player-bajada-groups">
                                         {player.dropped_combinations.map((combo, cIdx) => (
-                                            <div key={cIdx} className="player-bajada-group">
+                                            <div
+                                                key={cIdx}
+                                                className={`player-bajada-group ${canShed ? 'shed-available' : ''}`}
+                                                data-shed-player={player.id}
+                                                data-shed-combo={cIdx}
+                                            >
                                                 {combo.map((card, idx) => (
                                                     <div key={idx} className="bajada-card-rendered">
                                                         <Card card={card} isDraggable={false}
-                                                            style={{ width: 50, height: 70, fontSize: '0.7rem' }} />
+                                                            style={{ width: 'clamp(46px, 5vw, 68px)', height: 'clamp(64px, 7.5vw, 96px)', fontSize: 'clamp(0.6rem, 0.9vw, 0.85rem)' }} />
                                                     </div>
                                                 ))}
                                             </div>
@@ -604,15 +633,26 @@ export default function Game() {
                         </div>
 
                         {/* Sorting Zone — always visible when it's your turn or has cards */}
-                        {(isMyTurn || sortingZoneCards.length > 0) && (
-                            <SortingZone
-                                ref={sortingZoneRef}
-                                cards={sortingZoneCards}
-                                onReturnCard={handleReturnCardToHand}
-                                isDropActive={isSortingZoneDropActive}
-                                onReorder={handleSortingZoneReorder}
-                            />
-                        )}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', width: '100%', minWidth: 0 }}>
+                            {(isMyTurn || sortingZoneCards.length > 0) && (
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                    <SortingZone
+                                        ref={sortingZoneRef}
+                                        cards={sortingZoneCards}
+                                        onReturnCard={handleReturnCardToHand}
+                                        isDropActive={isSortingZoneDropActive}
+                                        onReorder={handleSortingZoneReorder}
+                                    />
+                                </div>
+                            )}
+
+                            {/* Bajar Button */}
+                            {bajadaReady && (
+                                <button className="bajar-btn" onClick={handleBajar}>
+                                    ¡Bajar!
+                                </button>
+                            )}
+                        </div>
                     </div>
                 </div>
             </main>

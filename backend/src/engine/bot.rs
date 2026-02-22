@@ -67,10 +67,60 @@ pub fn play_bot_turn(
             Some(decide_discard(game, player, difficulty))
         }
         BotTurnPhase::AfterBajada => {
+            // Try to shed a card first.
+            // Since check_bot_turn handles one action at a time, shedding
+            // will trigger another turn iteration if successful.
+            if let Some(action) = try_shedding(game, player, difficulty) {
+                return Some(action);
+            }
             // Must discard to end turn
             Some(decide_discard(game, player, difficulty))
         }
     }
+}
+
+fn try_shedding(
+    game: &GameState,
+    player: &PlayerState,
+    _difficulty: BotDifficulty,
+) -> Option<ClientMessage> {
+    if !player.has_drawn_this_turn || player.dropped_hand_this_turn {
+        return None;
+    }
+
+    let mut all_bajadas: Vec<(&str, &Vec<Vec<crate::engine::card::Card>>)> = Vec::new();
+    for p in &game.players {
+        if p.has_dropped_hand {
+            all_bajadas.push((p.id.as_str(), &p.dropped_combinations));
+        }
+    }
+
+    let possible_sheds =
+        crate::engine::combo_finder::find_sheddable_cards(&player.hand, &all_bajadas);
+    if possible_sheds.is_empty() {
+        return None;
+    }
+
+    // Pick a shed based on point value to minimize penalty if stuck
+    let best_shed = possible_sheds
+        .into_iter()
+        .max_by_key(|s| {
+            let card = &player.hand[s.hand_index];
+            if card.is_joker() {
+                50
+            } else {
+                card.points() as i32
+            }
+        })
+        .unwrap();
+
+    Some(ClientMessage::ShedCard {
+        payload: crate::api::events::ShedCardPayload {
+            hand_card_index: best_shed.hand_index,
+            target_player_id: best_shed.target_player_id,
+            target_combo_idx: best_shed.target_combo_idx,
+        },
+    })
 }
 
 // ─── Draw Phase ───────────────────────────────────────────────────────────────
@@ -306,6 +356,8 @@ mod tests {
             has_dropped_hand: has_dropped,
             dropped_combinations: vec![],
             turns_played,
+            has_drawn_this_turn: false,
+            dropped_hand_this_turn: false,
         }
     }
 

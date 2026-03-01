@@ -42,6 +42,13 @@ pub struct ReorderHandPayload {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PlayerScore {
+    pub id: String,
+    pub round_points: u32,
+    pub total_points: u32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", content = "payload")]
 pub enum ServerMessage {
     Error {
@@ -65,6 +72,15 @@ pub enum ServerMessage {
         required_trios: usize,
         required_escalas: usize,
     },
+    RoundEnded {
+        round_index: usize,
+        round_name: String,
+        winner_id: String,
+        player_scores: Vec<PlayerScore>,
+        next_round_index: usize,
+        next_round_name: String,
+        is_game_over: bool,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -75,6 +91,8 @@ pub struct SanitizedPlayerState {
     pub points: u32,
     pub dropped_combinations: Vec<Vec<Card>>,
     pub turns_played: u32,
+    pub has_drawn_this_turn: bool,
+    pub dropped_hand_this_turn: bool,
 }
 
 impl SanitizedPlayerState {
@@ -86,6 +104,8 @@ impl SanitizedPlayerState {
             points: state.points,
             dropped_combinations: state.dropped_combinations.clone(),
             turns_played: state.turns_played,
+            has_drawn_this_turn: state.has_drawn_this_turn,
+            dropped_hand_this_turn: state.dropped_hand_this_turn,
         }
     }
 }

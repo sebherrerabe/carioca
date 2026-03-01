@@ -125,29 +125,28 @@ pub fn find_all_escala_candidates(hand: &[Card]) -> Vec<MeldCandidate> {
     // Group standard card indices by suit, sorted by value
     let suits = [Suit::Hearts, Suit::Diamonds, Suit::Clubs, Suit::Spades];
     for suit in suits {
-        let mut suit_cards: Vec<(Value, usize)> = hand
-            .iter()
-            .enumerate()
-            .filter_map(|(i, c)| {
-                if let Card::Standard { suit: s, value } = c {
-                    if *s == suit { Some((*value, i)) } else { None }
-                } else {
-                    None
+        let mut suit_cards: Vec<(u8, usize)> = Vec::new();
+        for (i, c) in hand.iter().enumerate() {
+            if let Card::Standard { suit: s, value } = c {
+                if *s == suit {
+                    let mut v = *value as u8;
+                    if v == 14 {
+                        v = 1;
+                    }
+                    suit_cards.push((v, i));
+                    suit_cards.push((v + 13, i)); // Duplicate for wrapping detection
                 }
-            })
-            .collect();
-
-        // Deduplicate same-value cards: keep all (double-deck duplicates are distinct indices)
-        suit_cards.sort_by_key(|(v, _)| *v as u8);
-
-        let n = suit_cards.len();
-        if n < 4 {
-            // Even with a joker we need 3 standard to form a 4-card escala
-            if n < 3 || joker_indices.is_empty() {
-                continue;
             }
         }
 
+        suit_cards.sort_by_key(|(v, _)| *v);
+
+        let real_count = suit_cards.len() / 2;
+        if real_count < 4 && (real_count < 3 || joker_indices.is_empty()) {
+            continue; // At least 4 cards (or 3+Joker)
+        }
+
+        let n = suit_cards.len();
         // Try all contiguous subsequences (by sorted position) of length >= 4
         // A "contiguous" subsequence allows at most 1 gap of size 1 (filled by joker)
         'outer: for start in 0..n {
@@ -157,11 +156,14 @@ pub fn find_all_escala_candidates(hand: &[Card]) -> Vec<MeldCandidate> {
             let mut joker_slot: Option<usize> = None; // which joker from joker_indices
 
             for (cur_val, cur_hand_idx) in suit_cards.iter().skip(start + 1).copied() {
-                let cur_val = cur_val as u8;
+                if selected_indices.contains(&cur_hand_idx) {
+                    break; // Same original card encountered again
+                }
+
                 let gap = cur_val.saturating_sub(prev_val);
 
                 if gap == 0 {
-                    // Same value (double deck duplicate): skip to avoid duplicating in same escala
+                    // Same value (double-deck duplicate): skip to avoid duplicate value in escala
                     continue;
                 } else if gap == 1 {
                     // Consecutive
@@ -182,7 +184,6 @@ pub fn find_all_escala_candidates(hand: &[Card]) -> Vec<MeldCandidate> {
                 // Emit all sub-runs ending at current position with len >= 4
                 if selected_indices.len() >= 4 {
                     // Emit all suffixes of selected_indices that cover >= 4 cards
-                    // (sub-runs starting at later positions within current window)
                     emit_subruns(
                         &selected_indices,
                         MeldType::Escala,
@@ -193,7 +194,7 @@ pub fn find_all_escala_candidates(hand: &[Card]) -> Vec<MeldCandidate> {
 
                 if selected_indices.len() == 13 {
                     // Maximum escala reached
-                    break 'outer;
+                    break;
                 }
             }
         }
@@ -489,11 +490,16 @@ pub fn can_shed(card: &Card, meld: &[Card]) -> Option<ShedPosition> {
                 if *card_suit != suit {
                     return None;
                 }
-                let v = *value as u8;
-                if v + 1 == first_val {
+                let v_u8 = *value as u8;
+                let v = if v_u8 == 14 { 1 } else { v_u8 };
+
+                let prev_of_first = if first_val == 1 { 13 } else { first_val - 1 };
+                let next_of_last = if last_val == 13 { 1 } else { last_val + 1 };
+
+                if v == prev_of_first {
                     return Some(ShedPosition::ExtendLeft);
                 }
-                if v == last_val + 1 {
+                if v == next_of_last {
                     return Some(ShedPosition::ExtendRight);
                 }
                 None
@@ -540,6 +546,10 @@ fn is_meld_escala(meld: &[Card]) -> bool {
     crate::engine::rules::is_valid_escala(meld)
 }
 
+fn seq_val(v: u8) -> u8 {
+    if v == 14 { 1 } else { v }
+}
+
 fn escala_first_value(meld: &[Card]) -> Option<u8> {
     // The first standard card in the meld defines the start (jokers fill gaps)
     // Walk forward to infer position 0's value
@@ -547,7 +557,10 @@ fn escala_first_value(meld: &[Card]) -> Option<u8> {
     for card in meld {
         match card {
             Card::Standard { value, .. } => {
-                return Some((*value as i32 - offset) as u8);
+                let v = seq_val(*value as u8) as i32;
+                let steps = offset % 13;
+                let first_v = (v - 1 + 13 - steps) % 13 + 1;
+                return Some(first_v as u8);
             }
             Card::Joker => offset += 1,
         }
@@ -560,7 +573,10 @@ fn escala_last_value(meld: &[Card]) -> Option<u8> {
     for card in meld.iter().rev() {
         match card {
             Card::Standard { value, .. } => {
-                return Some((*value as i32 + offset) as u8);
+                let v = seq_val(*value as u8) as i32;
+                let steps = offset % 13;
+                let last_v = (v - 1 + steps) % 13 + 1;
+                return Some(last_v as u8);
             }
             Card::Joker => offset += 1,
         }
@@ -724,17 +740,17 @@ mod tests {
     }
 
     #[test]
-    fn escala_ace_high_only() {
-        // J-Q-K-A should be valid (ace high), but K-A-2 wrap must NOT form
+    fn escala_wrap_around() {
+        // J-Q-K-A-2 should be valid as well now
         let hand = vec![
-            std(Suit::Hearts, Value::Jack),  // idx 0  val=11
-            std(Suit::Hearts, Value::Queen), // idx 1  val=12
-            std(Suit::Hearts, Value::King),  // idx 2  val=13
-            std(Suit::Hearts, Value::Ace),   // idx 3  val=14
-            std(Suit::Hearts, Value::Two),   // idx 4  val=2  — should NOT connect to Ace
+            std(Suit::Hearts, Value::Jack),  // idx 0
+            std(Suit::Hearts, Value::Queen), // idx 1
+            std(Suit::Hearts, Value::King),  // idx 2
+            std(Suit::Hearts, Value::Ace),   // idx 3
+            std(Suit::Hearts, Value::Two),   // idx 4
         ];
         let candidates = find_all_escala_candidates(&hand);
-        // Should find J-Q-K-A (indices 0,1,2,3)
+
         assert!(
             candidates.iter().any(|c| {
                 let mut idxs = c.card_indices.clone();
@@ -743,12 +759,21 @@ mod tests {
             }),
             "Should find J-Q-K-A escala"
         );
-        // Must NOT find any escala including index 4 (the Two) adjacent to Ace
+
+        // NOW we should also find K-A-2 wrap escalas
+        let mut found_wrap = false;
         for c in &candidates {
-            if c.card_indices.contains(&3) && c.card_indices.contains(&4) {
-                panic!("Should not form K-A-2 or A-2 wrap escala");
+            if c.card_indices.contains(&2)
+                && c.card_indices.contains(&3)
+                && c.card_indices.contains(&4)
+            {
+                found_wrap = true;
             }
         }
+        assert!(
+            found_wrap,
+            "Should successfully form K-A-2 or A-2 wrap escala"
+        );
     }
 
     #[test]

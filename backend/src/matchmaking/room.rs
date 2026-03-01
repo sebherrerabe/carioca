@@ -1,4 +1,4 @@
-use crate::api::events::{ClientMessage, SanitizedPlayerState, ServerMessage};
+use crate::api::events::{ClientMessage, PlayerScore, SanitizedPlayerState, ServerMessage};
 use crate::engine::game::GameState;
 use tokio::sync::mpsc;
 
@@ -65,7 +65,10 @@ impl Room {
                     if user_id.starts_with("bot_") {
                         bot_action_pending = false;
                     }
-                    self.handle_action(user_id, action).await;
+                    let round_result = self.handle_action(user_id, action).await;
+                    if let Some(result) = round_result {
+                        self.broadcast_round_ended(&result).await;
+                    }
                     self.broadcast_state().await;
                 }
             }
@@ -110,12 +113,16 @@ impl Room {
         }
     }
 
-    async fn handle_action(&mut self, user_id: String, action: ClientMessage) {
+    async fn handle_action(
+        &mut self,
+        user_id: String,
+        action: ClientMessage,
+    ) -> Option<crate::engine::game::RoundEndResult> {
         // Enforce turn:
         let current_player_index = self.game_state.current_turn;
         if self.players.get(current_player_index) != Some(&user_id) {
             self.send_error(&user_id, "Not your turn").await;
-            return;
+            return None;
         }
 
         match action {
@@ -123,30 +130,41 @@ impl Room {
                 if let Err(e) = self.game_state.draw_from_deck() {
                     self.send_error(&user_id, e).await;
                 }
+                None
             }
             ClientMessage::DrawFromDiscard => {
                 if let Err(e) = self.game_state.draw_from_discard() {
                     self.send_error(&user_id, e).await;
                 }
+                None
             }
             ClientMessage::Discard { payload } => {
-                if let Err(e) = self.game_state.discard(payload.card_index) {
-                    self.send_error(&user_id, e).await;
+                match self.game_state.discard(payload.card_index) {
+                    Ok(round_result) => round_result,
+                    Err(e) => {
+                        self.send_error(&user_id, e).await;
+                        None
+                    }
                 }
             }
             ClientMessage::DropHand { payload } => {
                 if let Err(e) = self.game_state.drop_hand(&user_id, payload.combinations) {
                     self.send_error(&user_id, e).await;
                 }
+                None
             }
             ClientMessage::ShedCard { payload } => {
-                if let Err(e) = self.game_state.shed_card(
+                match self.game_state.shed_card(
                     &user_id,
                     payload.hand_card_index,
                     &payload.target_player_id,
                     payload.target_combo_idx,
                 ) {
-                    self.send_error(&user_id, e).await;
+                    Ok(round_result) => round_result,
+                    Err(e) => {
+                        self.send_error(&user_id, e).await;
+                        None
+                    }
                 }
             }
             ClientMessage::ReorderHand { payload } => {
@@ -159,6 +177,7 @@ impl Room {
                     // Forcefully resync the offending client with the source of truth
                     self.send_state_to_user(&user_id).await;
                 }
+                None
             }
         }
     }
@@ -215,6 +234,30 @@ impl Room {
         };
 
         Some((target_user_id.to_string(), msg))
+    }
+
+    async fn broadcast_round_ended(&self, result: &crate::engine::game::RoundEndResult) {
+        let msg = ServerMessage::RoundEnded {
+            round_index: result.finished_round_index,
+            round_name: result.finished_round_name.clone(),
+            winner_id: result.winner_id.clone(),
+            player_scores: result
+                .player_scores
+                .iter()
+                .map(|(id, rp, tp)| PlayerScore {
+                    id: id.clone(),
+                    round_points: *rp,
+                    total_points: *tp,
+                })
+                .collect(),
+            next_round_index: result.next_round_index,
+            next_round_name: result.next_round_name.clone(),
+            is_game_over: result.is_game_over,
+        };
+
+        for sender in self.player_channels.values() {
+            let _ = sender.send(msg.clone()).await;
+        }
     }
 
     async fn broadcast_state(&self) {

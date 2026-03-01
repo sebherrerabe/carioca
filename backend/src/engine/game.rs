@@ -60,6 +60,17 @@ impl RoundType {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct RoundEndResult {
+    pub finished_round_index: usize,
+    pub finished_round_name: String,
+    pub winner_id: String,
+    pub player_scores: Vec<(String, u32, u32)>,
+    pub next_round_index: usize,
+    pub next_round_name: String,
+    pub is_game_over: bool,
+}
+
 #[derive(Clone)]
 pub struct GameState {
     pub players: Vec<PlayerState>,
@@ -182,7 +193,7 @@ impl GameState {
         Ok(())
     }
 
-    pub fn discard(&mut self, card_index: usize) -> Result<(), &'static str> {
+    pub fn discard(&mut self, card_index: usize) -> Result<Option<RoundEndResult>, &'static str> {
         if self.is_game_over {
             return Err("Game is over");
         }
@@ -210,15 +221,15 @@ impl GameState {
 
         // Check if player won the round (no cards left)
         if hand_is_empty {
-            self.end_round();
-            return Ok(());
+            let result = self.end_round();
+            return Ok(Some(result));
         }
 
         // Advance turn
         self.current_turn = (self.current_turn + 1) % self.players.len();
         self.players[self.current_turn].has_drawn_this_turn = false;
         self.players[self.current_turn].dropped_hand_this_turn = false;
-        Ok(())
+        Ok(None)
     }
 
     pub fn reorder_hand(
@@ -297,16 +308,15 @@ impl GameState {
         let mut found_escalas = 0;
 
         for combo in &combinations {
-            // Strict size enforcement: trios must be exactly 3 cards,
-            // escalas exactly 4 cards during initial bajada.
-            // Extensions happen via shedding in subsequent turns.
-            if combo.len() == 3 && is_valid_trio(combo) {
+            // Strict size enforcement: trios must be at least 3 cards,
+            // escalas at least 4 cards during initial bajada.
+            if combo.len() >= 3 && crate::engine::rules::is_valid_trio(combo) {
                 found_trios += 1;
-            } else if combo.len() == 4 && is_valid_escala(combo) {
+            } else if combo.len() >= 4 && crate::engine::rules::is_valid_escala(combo) {
                 found_escalas += 1;
             } else {
                 return Err(
-                    "Invalid combination: trios must be exactly 3 cards, escalas exactly 4",
+                    "Invalid combination: trios must be at least 3 cards, escalas at least 4",
                 );
             }
         }
@@ -339,7 +349,7 @@ impl GameState {
         hand_card_index: usize,
         target_player_id: &str,
         target_combo_idx: usize,
-    ) -> Result<(), &'static str> {
+    ) -> Result<Option<RoundEndResult>, &'static str> {
         if self.is_game_over {
             return Err("Game is over");
         }
@@ -403,29 +413,67 @@ impl GameState {
 
         // Check if the current player won by emptying their hand (shed their last card)
         if self.players[current_idx].hand.is_empty() {
-            self.end_round();
+            let result = self.end_round();
+            return Ok(Some(result));
         }
 
-        Ok(())
+        Ok(None)
     }
 
-    pub fn end_round(&mut self) {
-        // Calculate points
-        for player in &mut self.players {
-            player.points += crate::engine::points::calculate_hand_points(&player.hand);
+    pub fn end_round(&mut self) -> RoundEndResult {
+        let finished_round_index = self.round_index;
+        let finished_round_name = self.current_round.description().to_string();
+        let winner_id = self.players[self.current_turn].id.clone();
+
+        // Calculate points for this round (before adding to totals)
+        let round_points: Vec<u32> = self
+            .players
+            .iter()
+            .map(|p| crate::engine::points::calculate_hand_points(&p.hand))
+            .collect();
+
+        // Add round points to totals
+        for (i, player) in self.players.iter_mut().enumerate() {
+            player.points += round_points[i];
         }
+
+        // Build per-player scores
+        let player_scores: Vec<(String, u32, u32)> = self
+            .players
+            .iter()
+            .enumerate()
+            .map(|(i, p)| (p.id.clone(), round_points[i], p.points))
+            .collect();
 
         // Advance round
         self.round_index += 1;
         let rounds = RoundType::all_rounds();
+        let is_game_over;
+        let next_round_index;
+        let next_round_name;
+
         if self.round_index < rounds.len() {
             self.current_round = rounds[self.round_index];
-            // Next round starts with the player next to the one who started this round
-            // For MVP, just reset to player 0 or keep rotating. Let's keep simple for now.
             self.current_turn = self.round_index % self.players.len();
+            next_round_index = self.round_index;
+            next_round_name = self.current_round.description().to_string();
+            is_game_over = false;
             self.start_round();
         } else {
             self.is_game_over = true;
+            is_game_over = true;
+            next_round_index = self.round_index;
+            next_round_name = "Game Over".to_string();
+        }
+
+        RoundEndResult {
+            finished_round_index,
+            finished_round_name,
+            winner_id,
+            player_scores,
+            next_round_index,
+            next_round_name,
+            is_game_over,
         }
     }
 }
@@ -433,114 +481,7 @@ impl GameState {
 // ---------------------------------------------
 // Validation Logic
 // ---------------------------------------------
-
-fn is_valid_trio(combo: &[Card]) -> bool {
-    if combo.len() < 3 {
-        return false;
-    }
-
-    let mut target_value = None;
-
-    for card in combo {
-        if let Card::Standard { value, .. } = card {
-            if let Some(tv) = target_value {
-                if *value != tv {
-                    return false; // Mismatched value in Trio
-                }
-            } else {
-                target_value = Some(*value);
-            }
-        }
-    }
-
-    // Jokers are always valid. If the combo was entirely jokers (target_value == None), that's technically valid too.
-    true
-}
-
-fn is_valid_escala(combo: &[Card]) -> bool {
-    if combo.len() < 4 {
-        return false;
-    }
-
-    let mut target_suit = None;
-
-    // First pass: identify the target suit
-    for card in combo {
-        if let Card::Standard { suit, .. } = card {
-            if let Some(ts) = target_suit {
-                if *suit != ts {
-                    return false; // Mismatched suit in Escala
-                }
-            } else {
-                target_suit = Some(*suit);
-            }
-        }
-    }
-
-    // Second pass: verify sequential ascending order.
-    // We expect values to increment by 1 each step.
-    let mut expected_value_int = None;
-
-    for card in combo {
-        match card {
-            Card::Standard { value, .. } => {
-                let val_int = *value as i32;
-                if let Some(exp) = expected_value_int
-                    && val_int != exp
-                {
-                    return false; // Out of sequence
-                }
-                expected_value_int = Some(val_int + 1);
-            }
-            Card::Joker => {
-                // The joker takes the place of whatever the expected standard card was
-                if let Some(exp) = expected_value_int {
-                    expected_value_int = Some(exp + 1);
-                } else {
-                    // First card is a joker. We can't immediately deduce the sequence start.
-                    // This creates a small gap in simple validation where a leading joker isn't strongly bound
-                    // until we hit a standard card, which is computationally tricky.
-                    // For MVP simplicity, let's just accept leading jokers that bump the sequence implicitly when we find it.
-                    // Wait, if we just defer setting expected_value_int, how do we know if it was correct?
-                    // Let's implement a rigid backward inference:
-                    // Find the first Standard card, trace back to define what the first card MUST be.
-                }
-            }
-        }
-    }
-
-    // Rigid check for Escala:
-    // 1. Find the first Standard card to anchor the sequence.
-    let first_std_idx = combo.iter().position(|c| !c.is_joker());
-
-    if let Some(idx) = first_std_idx
-        && let Card::Standard { value, .. } = &combo[idx]
-    {
-        let anchor_val = *value as i32;
-        let mut expected_val = anchor_val - (idx as i32);
-
-        for card in combo {
-            match card {
-                Card::Standard { value: cv, .. } => {
-                    if (*cv as i32) != expected_val {
-                        return false;
-                    }
-                }
-                Card::Joker => {
-                    // Takes the place of expected_val natively
-                }
-            }
-            expected_val += 1;
-
-            // If sequence exceeds Ace (14), it's invalid unless bridging K-A-2 (which we ignore logic-wise for MVP)
-            if expected_val > 15 {
-                return false;
-            }
-        }
-    }
-
-    true
-}
+// Validation delegates to crate::engine::rules
 
 #[cfg(test)]
 mod tests {
@@ -724,6 +665,37 @@ mod tests {
         assert_eq!(
             game.players[1].dropped_combinations[0].first().unwrap(),
             &std(Suit::Diamonds, Value::Two)
+        );
+    }
+
+    #[test]
+    fn shed_ace_left_on_escala_starting_with_two() {
+        use crate::engine::card::{Suit, Value};
+        let mut game = game_with_alice_bajado();
+
+        // bob's combo is 3-4-5-6. Let's make it 2-3-4-5 instead.
+        game.players[1].dropped_combinations = vec![vec![
+            std(Suit::Diamonds, Value::Two),
+            std(Suit::Diamonds, Value::Three),
+            std(Suit::Diamonds, Value::Four),
+            std(Suit::Diamonds, Value::Five),
+        ]];
+
+        game.players[0].hand = vec![
+            std(Suit::Diamonds, Value::Ace), // We want to shed this
+            std(Suit::Clubs, Value::King),
+        ];
+
+        let result = game.shed_card("alice", 0, "bob", 0);
+        assert!(
+            result.is_ok(),
+            "Should shed A♦ onto bob's 2-3-4-5♦ escala on the left"
+        );
+        assert_eq!(game.players[1].dropped_combinations[0].len(), 5);
+        // First card should be A♦
+        assert_eq!(
+            game.players[1].dropped_combinations[0].first().unwrap(),
+            &std(Suit::Diamonds, Value::Ace)
         );
     }
 

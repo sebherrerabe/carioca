@@ -4,7 +4,7 @@ import { Reorder } from 'framer-motion';
 import { useWebSocket } from '../lib/WebSocketContext';
 import { Card, type CardData } from '../components/Card';
 import { SortingZone, type SortingCard } from '../components/SortingZone';
-import { detectCombos, isBajadaComplete } from '../lib/comboDetection';
+import { detectCombos, isBajadaComplete, isDescendingEscala } from '../lib/comboDetection';
 import './Game.css';
 
 const BOT_DISPLAY_NAMES: Record<string, string> = {
@@ -26,7 +26,7 @@ interface HandCard {
 
 export default function Game() {
     const [, setLocation] = useLocation();
-    const { gameState, disconnect, sendAction, error } = useWebSocket();
+    const { gameState, roundEndData, clearRoundEndData, disconnect, sendAction, error } = useWebSocket();
     const username = localStorage.getItem('username') || '';
 
     // Safely decode the user_id
@@ -67,8 +67,7 @@ export default function Game() {
     // ─── Derived State ───────────────────────────────────────
     const me = gameState?.players.find(p => p.id === userId);
     const isMyTurn = gameState ? (me && gameState.players.indexOf(me) === gameState.current_turn_index) : false;
-    const totalCards = (gameState?.my_hand.length ?? 0) + (me?.dropped_combinations.reduce((acc, c) => acc + c.length, 0) ?? 0);
-    const hasDrawn = totalCards > 12;
+    const hasDrawn = me?.has_drawn_this_turn ?? false;
     const canDraw = isMyTurn && !hasDrawn;
     const isFirstTurn = (me?.turns_played ?? 0) === 0;
     const canBajar = isMyTurn && hasDrawn && !isFirstTurn && !(me?.has_dropped_hand);
@@ -98,6 +97,27 @@ export default function Game() {
             gameState.required_escalas,
         );
     }, [sortingZoneCombos, gameState, canBajar]);
+
+    // Auto-sort descending escalas into ascending order
+    useEffect(() => {
+        let changed = false;
+        const newCards = [...sortingZoneCards];
+
+        sortingZoneCombos.forEach(combo => {
+            if (combo.type === 'escala') {
+                const comboCards = newCards.slice(combo.startIndex, combo.endIndex + 1);
+                if (isDescendingEscala(comboCards.map(c => c.card))) {
+                    comboCards.reverse();
+                    newCards.splice(combo.startIndex, comboCards.length, ...comboCards);
+                    changed = true;
+                }
+            }
+        });
+
+        if (changed) {
+            setSortingZoneCards(newCards);
+        }
+    }, [sortingZoneCards, sortingZoneCombos]);
 
     // Instruction text
     const getInstruction = (): string => {
@@ -172,7 +192,7 @@ export default function Game() {
         }
 
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [gameState?.my_hand]);
+    }, [gameState?.my_hand, gameState?.players]);
 
 
     // ─── Bajar Button Handler ────
@@ -397,6 +417,53 @@ export default function Game() {
             {error && (
                 <div style={{ background: '#e11d48', color: 'white', padding: '0.5rem', textAlign: 'center', fontWeight: 'bold' }}>
                     ⚠️ {error}
+                </div>
+            )}
+
+            {/* Round Transition Overlay */}
+            {roundEndData && (
+                <div className="round-transition-overlay">
+                    <div className="round-transition-card">
+                        <h1 className="round-transition-title">{roundEndData.is_game_over ? 'Game Over!' : 'Round Complete!'}</h1>
+                        <h2 className="round-transition-subtitle">{roundEndData.round_name}</h2>
+
+                        <div className="round-winner">
+                            <span className="winner-icon">🏆</span>
+                            <span className="winner-name">{getPlayerDisplayName(roundEndData.winner_id)}</span>
+                            <span className="winner-label">won the round!</span>
+                        </div>
+
+                        <table className="round-scores-table">
+                            <thead>
+                                <tr>
+                                    <th>Player</th>
+                                    <th>Round Points</th>
+                                    <th>Total Points</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {[...roundEndData.player_scores].sort((a, b) => a.total_points - b.total_points).map(score => (
+                                    <tr key={score.id} className={score.id === userId ? 'my-score-row' : ''}>
+                                        <td>{getPlayerDisplayName(score.id)}</td>
+                                        <td className="round-points">+{score.round_points}</td>
+                                        <td className="total-points">{score.total_points}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+
+                        <button
+                            className="btn btn-primary btn-large continue-btn"
+                            onClick={() => {
+                                clearRoundEndData();
+                                if (roundEndData.is_game_over) {
+                                    handleQuit();
+                                }
+                            }}
+                        >
+                            {roundEndData.is_game_over ? 'Return to Lobby' : `Start Next Round`}
+                        </button>
+                    </div>
                 </div>
             )}
 

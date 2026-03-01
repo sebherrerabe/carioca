@@ -69,18 +69,39 @@ pub fn is_valid_escala(cards: &[Card]) -> bool {
     // Handling the "Ace can wrap around" (2-A-K-Q) is complex.
     // For MVP, we'll just check if they can form a consecutive sequence with the available jokers.
 
-    let mut values: Vec<u8> = standard_cards.iter().map(|(v, _)| *v as u8).collect();
+    let mut values: Vec<u8> = standard_cards
+        .iter()
+        .map(|(v, _)| {
+            let v_u8 = *v as u8;
+            if v_u8 == 14 { 1 } else { v_u8 }
+        })
+        .collect();
     values.sort_unstable();
 
-    // Simple consecutive check (without Ace wrap around for MVP V1)
-    let mut needed_jokers = 0;
-    for i in 0..values.len() - 1 {
-        let diff = values[i + 1] - values[i];
-        if diff == 0 {
+    // Check for duplicates
+    for i in 0..values.len().saturating_sub(1) {
+        if values[i] == values[i + 1] {
             return false; // Duplicates not allowed in escala
         }
-        needed_jokers += diff - 1;
     }
+
+    // Modular sequence gap check to support wrap around (e.g. K-A-2)
+    let mut max_gap = 0;
+    for i in 0..values.len() {
+        let v1 = values[i];
+        let v2 = values[(i + 1) % values.len()];
+        let gap = if i == values.len() - 1 {
+            v2 + 13 - v1
+        } else {
+            v2 - v1
+        };
+        if gap > max_gap {
+            max_gap = gap;
+        }
+    }
+
+    let span = 13 - max_gap + 1;
+    let needed_jokers = span - values.len() as u8;
 
     needed_jokers <= jokers as u8
 }
@@ -195,6 +216,29 @@ mod tests {
             Card::Standard {
                 suit: Suit::Hearts,
                 value: Value::Six,
+            },
+        ];
+        assert!(is_valid_escala(&cards));
+    }
+
+    #[test]
+    fn test_valid_escala_wrapping_k_a_2() {
+        let cards = vec![
+            Card::Standard {
+                suit: Suit::Spades,
+                value: Value::King,
+            },
+            Card::Standard {
+                suit: Suit::Spades,
+                value: Value::Ace,
+            },
+            Card::Standard {
+                suit: Suit::Spades,
+                value: Value::Two,
+            },
+            Card::Standard {
+                suit: Suit::Spades,
+                value: Value::Three,
             },
         ];
         assert!(is_valid_escala(&cards));

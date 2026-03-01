@@ -129,6 +129,20 @@ describe('isValidEscala', () => {
             card('Five', 'Hearts'), card('Six', 'Hearts'),
         ])).toBe(true);
     });
+
+    it('returns true for wrapping from King to Two via Ace', () => {
+        expect(isValidEscala([
+            card('King', 'Hearts'), card('Ace', 'Hearts'),
+            card('Two', 'Hearts'), card('Three', 'Hearts'),
+        ])).toBe(true);
+    });
+
+    it('returns true for wrapping from Queen to Two via Joker (acting as King)', () => {
+        expect(isValidEscala([
+            card('Queen', 'Diamonds'), joker,
+            card('Ace', 'Diamonds'), card('Two', 'Diamonds'),
+        ])).toBe(true);
+    });
 });
 
 // ─── isPartialEscala ─────────────────────────────────────────
@@ -153,6 +167,12 @@ describe('isPartialEscala', () => {
             card('Five', 'Hearts'), card('Six', 'Hearts'),
             card('Seven', 'Hearts'), card('Eight', 'Hearts'),
         ])).toBe(false);
+    });
+
+    it('returns true for wrapping partial escala', () => {
+        expect(isPartialEscala([
+            card('King', 'Hearts'), card('Ace', 'Hearts'), card('Two', 'Hearts'),
+        ])).toBe(true);
     });
 });
 

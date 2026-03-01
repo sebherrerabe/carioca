@@ -28,14 +28,12 @@ pub enum BotTurnPhase {
 }
 
 pub fn detect_phase(player: &PlayerState) -> BotTurnPhase {
-    if player.has_dropped_hand {
-        // Already bajado — must discard remaining cards
-        BotTurnPhase::AfterBajada
-    } else if player.hand.len() == 13 {
-        BotTurnPhase::AfterDraw
-    } else {
-        // hand.len() == 12 (or < 12 before deal, which shouldn't happen)
+    if !player.has_drawn_this_turn {
         BotTurnPhase::NeedDraw
+    } else if player.has_dropped_hand {
+        BotTurnPhase::AfterBajada
+    } else {
+        BotTurnPhase::AfterDraw
     }
 }
 
@@ -130,7 +128,8 @@ fn decide_draw(
     player: &PlayerState,
     difficulty: BotDifficulty,
 ) -> Option<ClientMessage> {
-    if game.discard_pile.is_empty() {
+    // Rule: "Si un jugador se baja no puede recoger desde el mazo de descarte"
+    if game.discard_pile.is_empty() || player.has_dropped_hand {
         return Some(ClientMessage::DrawFromDeck);
     }
 
@@ -369,17 +368,19 @@ mod tests {
 
     #[test]
     fn phase_detection_after_draw() {
-        let player = make_player(vec![std(Suit::Hearts, Value::Two); 13], false, 1);
+        let mut player = make_player(vec![std(Suit::Hearts, Value::Two); 13], false, 1);
+        player.has_drawn_this_turn = true;
         assert_eq!(detect_phase(&player), BotTurnPhase::AfterDraw);
     }
 
     #[test]
     fn phase_detection_after_bajada() {
-        let player = make_player(
+        let mut player = make_player(
             vec![std(Suit::Hearts, Value::Three); 5],
             true, // has_dropped_hand
             3,
         );
+        player.has_drawn_this_turn = true;
         assert_eq!(detect_phase(&player), BotTurnPhase::AfterBajada);
     }
 
@@ -417,7 +418,8 @@ mod tests {
             std(Suit::Clubs, Value::Six),
             std(Suit::Spades, Value::Queen), // 13th
         ]);
-        let player = make_player(hand, false, 1); // turns_played > 0
+        let mut player = make_player(hand, false, 1); // turns_played > 0
+        player.has_drawn_this_turn = true;
         let game = dummy_game_at_player(player);
         let action = play_bot_turn(&game, "bot_test", BotDifficulty::Medium);
         assert!(action.is_some());
@@ -448,7 +450,8 @@ mod tests {
             std(Suit::Clubs, Value::Six),
             std(Suit::Spades, Value::Queen),
         ]);
-        let player = make_player(hand, false, 0); // turns_played == 0 → first turn
+        let mut player = make_player(hand, false, 0); // turns_played == 0 → first turn
+        player.has_drawn_this_turn = true;
         let game = dummy_game_at_player(player);
         let action = play_bot_turn(&game, "bot_test", BotDifficulty::Medium);
         // Must Discard, NOT DropHand
@@ -492,6 +495,7 @@ mod tests {
         ];
         game.players[0].hand = hand;
         game.players[0].turns_played = 2;
+        game.players[0].has_drawn_this_turn = true;
         game.current_turn = 0;
 
         let action = play_bot_turn(&game, "bot_test", BotDifficulty::Hard);

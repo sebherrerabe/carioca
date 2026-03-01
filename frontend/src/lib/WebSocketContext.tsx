@@ -12,7 +12,24 @@ interface PlayerState {
     points: number;
     dropped_combinations: CardData[][];
     turns_played: number;
+    has_drawn_this_turn: boolean;
     dropped_hand_this_turn: boolean;
+}
+
+export interface PlayerScore {
+    id: string;
+    round_points: number;
+    total_points: number;
+}
+
+export interface RoundEndData {
+    round_index: number;
+    round_name: string;
+    winner_id: string;
+    player_scores: PlayerScore[];
+    next_round_index: number;
+    next_round_name: string;
+    is_game_over: boolean;
 }
 
 export interface GameState {
@@ -30,15 +47,19 @@ export interface GameState {
 type ServerMessage =
     | { type: 'MatchFound', payload: { room_id: string, players: string[] } }
     | { type: 'GameStateUpdate', payload: GameState }
+    | { type: 'RoundEnded', payload: RoundEndData }
     | { type: 'Error', payload: { message: string } };
 
 interface WebSocketContextType {
     socket: WebSocket | null;
     gameState: GameState | null;
+    roundEndData: RoundEndData | null;
     connect: (token: string) => void;
     disconnect: () => void;
     sendAction: (action: unknown) => void;
     error: string | null;
+    clearError: () => void;
+    clearRoundEndData: () => void;
 }
 
 const WebSocketContext = createContext<WebSocketContextType | undefined>(undefined);
@@ -46,8 +67,12 @@ const WebSocketContext = createContext<WebSocketContextType | undefined>(undefin
 export function WebSocketProvider({ children }: { children: ReactNode }) {
     const [socket, setSocket] = useState<WebSocket | null>(null);
     const [gameState, setGameState] = useState<GameState | null>(null);
+    const [roundEndData, setRoundEndData] = useState<RoundEndData | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [, setLocation] = useLocation();
+
+    const clearError = () => setError(null);
+    const clearRoundEndData = () => setRoundEndData(null);
 
     const connect = (token: string) => {
         if (socket) return;
@@ -64,6 +89,10 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
                     case 'GameStateUpdate':
                         console.log("📥 Received GameStateUpdate:", msg.payload);
                         setGameState(msg.payload);
+                        break;
+                    case 'RoundEnded':
+                        console.log("🏆 Received RoundEnded:", msg.payload);
+                        setRoundEndData(msg.payload);
                         break;
                     case 'Error':
                         setError(msg.payload.message);
@@ -91,12 +120,13 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
 
     const sendAction = (action: unknown) => {
         if (socket && socket.readyState === WebSocket.OPEN) {
+            clearError();
             socket.send(JSON.stringify(action));
         }
     };
 
     return (
-        <WebSocketContext.Provider value={{ socket, gameState, connect, disconnect, sendAction, error }}>
+        <WebSocketContext.Provider value={{ socket, gameState, roundEndData, connect, disconnect, sendAction, error, clearError, clearRoundEndData }}>
             {children}
         </WebSocketContext.Provider>
     );

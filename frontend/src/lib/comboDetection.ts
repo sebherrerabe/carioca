@@ -14,11 +14,11 @@ export interface DetectedCombo {
 
 // ─── Helpers ─────────────────────────────────────────────────
 
-function isStandard(card: CardData): card is { Standard: { suit: 'Hearts' | 'Diamonds' | 'Clubs' | 'Spades'; value: string } } {
+export function isStandard(card: CardData): card is { Standard: { suit: 'Hearts' | 'Diamonds' | 'Clubs' | 'Spades'; value: string } } {
     return typeof card === 'object' && 'Standard' in card;
 }
 
-function isJoker(card: CardData): card is 'Joker' {
+export function isJoker(card: CardData): card is 'Joker' {
     return card === 'Joker';
 }
 
@@ -28,19 +28,53 @@ const VALUE_ORDER: Record<string, number> = {
     'Jack': 11, 'Queen': 12, 'King': 13, 'Ace': 14,
 };
 
-function getValueRank(card: CardData): number | null {
+export function getValueRank(card: CardData): number | null {
     if (isStandard(card)) return VALUE_ORDER[card.Standard.value] ?? null;
     return null;
 }
 
-function getSuit(card: CardData): string | null {
+export function getSuit(card: CardData): string | null {
     if (isStandard(card)) return card.Standard.suit;
     return null;
 }
 
-function getValueName(card: CardData): string | null {
+export function getValueName(card: CardData): string | null {
     if (isStandard(card)) return card.Standard.value;
     return null;
+}
+
+/**
+ * Gets the wrapped rank (2-14) given a starting rank and an offset.
+ * e.g. Rank 14 (Ace) + 1 = Rank 2. Rank 2 - 1 = Rank 14 (Ace).
+ */
+export function getWrappedRank(startRank: number, offset: number): number {
+    // Ranks are 2 to 14. Convert to 0-12 range for modulo.
+    let zeroBased = startRank - 2;
+    // Apply offset and ensure positive result for modulo
+    zeroBased = (zeroBased + offset) % 13;
+    if (zeroBased < 0) zeroBased += 13;
+    // Convert back to 2-14 range
+    return zeroBased + 2;
+}
+
+/**
+ * Checks if a given array of cards represents a descending sequence
+ */
+export function isDescendingEscala(cards: CardData[]): boolean {
+    let firstStdIdx = -1;
+    let lastStdIdx = -1;
+    for (let i = 0; i < cards.length; i++) {
+        if (!isJoker(cards[i])) {
+            if (firstStdIdx === -1) firstStdIdx = i;
+            lastStdIdx = i;
+        }
+    }
+    if (firstStdIdx !== -1 && lastStdIdx !== -1 && firstStdIdx !== lastStdIdx) {
+        const firstRank = getValueRank(cards[firstStdIdx])!;
+        const lastRank = getValueRank(cards[lastStdIdx])!;
+        return getWrappedRank(firstRank, -(lastStdIdx - firstStdIdx)) === lastRank;
+    }
+    return false;
 }
 
 // ─── Trio Detection ──────────────────────────────────────────
@@ -128,8 +162,7 @@ export function isValidEscala(cards: CardData[]): boolean {
     const targetSuit = standardCards[0].suit;
     if (!standardCards.every(c => c.suit === targetSuit)) return false;
 
-    // Use the anchoring approach: find the first standard card position,
-    // then verify the sequence using in-order traversal
+    // Find the first standard card position
     let firstStdIdx = -1;
     for (let i = 0; i < cards.length; i++) {
         if (!isJoker(cards[i])) { firstStdIdx = i; break; }
@@ -137,20 +170,30 @@ export function isValidEscala(cards: CardData[]): boolean {
     if (firstStdIdx === -1) return false;
 
     const anchorRank = getValueRank(cards[firstStdIdx])!;
-    const startRank = anchorRank - firstStdIdx;
 
+    // Check ascending order sequence
+    let isValidAscending = true;
     for (let i = 0; i < cards.length; i++) {
-        const expectedRank = startRank + i;
-        if (expectedRank < 2 || expectedRank > 14) return false;
-
+        const expectedRank = getWrappedRank(anchorRank, i - firstStdIdx);
         const card = cards[i];
-        if (isJoker(card)) continue; // joker fills this slot
-
-        const rank = getValueRank(card);
-        if (rank !== expectedRank) return false;
+        if (!isJoker(card) && getValueRank(card) !== expectedRank) {
+            isValidAscending = false;
+            break;
+        }
     }
 
-    return true;
+    // Check descending order sequence
+    let isValidDescending = true;
+    for (let i = 0; i < cards.length; i++) {
+        const expectedRank = getWrappedRank(anchorRank, firstStdIdx - i);
+        const card = cards[i];
+        if (!isJoker(card) && getValueRank(card) !== expectedRank) {
+            isValidDescending = false;
+            break;
+        }
+    }
+
+    return isValidAscending || isValidDescending;
 }
 
 /**
@@ -179,7 +222,7 @@ export function isPartialEscala(cards: CardData[]): boolean {
     const targetSuit = standardCards[0].suit;
     if (!standardCards.every(c => c.suit === targetSuit)) return false;
 
-    // Check consecutive using anchor approach
+    // Check consecutive using anchor approach for both ascending and descending
     let firstStdIdx = -1;
     for (let i = 0; i < cards.length; i++) {
         if (!isJoker(cards[i])) { firstStdIdx = i; break; }
@@ -187,20 +230,28 @@ export function isPartialEscala(cards: CardData[]): boolean {
     if (firstStdIdx === -1) return false;
 
     const anchorRank = getValueRank(cards[firstStdIdx])!;
-    const startRank = anchorRank - firstStdIdx;
 
+    let isValidAscending = true;
     for (let i = 0; i < cards.length; i++) {
-        const expectedRank = startRank + i;
-        if (expectedRank < 2 || expectedRank > 14) return false;
-
+        const expectedRank = getWrappedRank(anchorRank, i - firstStdIdx);
         const card = cards[i];
-        if (isJoker(card)) continue;
-
-        const rank = getValueRank(card);
-        if (rank !== expectedRank) return false;
+        if (!isJoker(card) && getValueRank(card) !== expectedRank) {
+            isValidAscending = false;
+            break;
+        }
     }
 
-    return true;
+    let isValidDescending = true;
+    for (let i = 0; i < cards.length; i++) {
+        const expectedRank = getWrappedRank(anchorRank, firstStdIdx - i);
+        const card = cards[i];
+        if (!isJoker(card) && getValueRank(card) !== expectedRank) {
+            isValidDescending = false;
+            break;
+        }
+    }
+
+    return isValidAscending || isValidDescending;
 }
 
 // ─── Combo Scanning ──────────────────────────────────────────
@@ -216,34 +267,57 @@ export function detectCombos(cards: CardData[]): DetectedCombo[] {
     const combos: DetectedCombo[] = [];
     const used = new Set<number>();
 
-    // Strategy: detect exact-size combos for bajada (trios=3, escalas=4)
-    // Pass 1: Escalas (exactly 4 consecutive same-suit cards)
+    // Pass 1: Escalas (>= 4 same-suit cards)
     for (let start = 0; start <= cards.length - 4; start++) {
-        let anyUsed = false;
-        for (let i = start; i < start + 4; i++) {
-            if (used.has(i)) { anyUsed = true; break; }
-        }
-        if (anyUsed) continue;
+        if (used.has(start)) continue;
 
-        const window = cards.slice(start, start + 4);
-        if (isValidEscala(window)) {
-            combos.push({ type: 'escala', startIndex: start, endIndex: start + 3 });
-            for (let i = start; i < start + 4; i++) used.add(i);
+        // Find longest valid length
+        let bestLen = 0;
+        for (let len = 4; start + len <= cards.length; len++) {
+            // Check if any card in this window is used
+            let anyUsed = false;
+            for (let i = start; i < start + len; i++) {
+                if (used.has(i)) { anyUsed = true; break; }
+            }
+            if (anyUsed) break;
+
+            const window = cards.slice(start, start + len);
+            if (isValidEscala(window)) {
+                bestLen = len;
+            } else {
+                break; // Because elements must be continuous ascending, an invalid longer group won't become valid by adding more
+            }
+        }
+
+        if (bestLen >= 4) {
+            combos.push({ type: 'escala', startIndex: start, endIndex: start + bestLen - 1 });
+            for (let i = start; i < start + bestLen; i++) used.add(i);
         }
     }
 
-    // Pass 2: Trios (exactly 3 same-value cards)
+    // Pass 2: Trios (>= 3 same-value cards)
     for (let start = 0; start <= cards.length - 3; start++) {
-        let anyUsed = false;
-        for (let i = start; i < start + 3; i++) {
-            if (used.has(i)) { anyUsed = true; break; }
-        }
-        if (anyUsed) continue;
+        if (used.has(start)) continue;
 
-        const window = cards.slice(start, start + 3);
-        if (isValidTrio(window)) {
-            combos.push({ type: 'trio', startIndex: start, endIndex: start + 2 });
-            for (let i = start; i < start + 3; i++) used.add(i);
+        let bestLen = 0;
+        for (let len = 3; start + len <= cards.length; len++) {
+            let anyUsed = false;
+            for (let i = start; i < start + len; i++) {
+                if (used.has(i)) { anyUsed = true; break; }
+            }
+            if (anyUsed) break;
+
+            const window = cards.slice(start, start + len);
+            if (isValidTrio(window)) {
+                bestLen = len;
+            } else {
+                break; // If a longer trio breaks (e.g. different value), adding more won't fix it
+            }
+        }
+
+        if (bestLen >= 3) {
+            combos.push({ type: 'trio', startIndex: start, endIndex: start + bestLen - 1 });
+            for (let i = start; i < start + bestLen; i++) used.add(i);
         }
     }
 
@@ -283,6 +357,3 @@ export function isBajadaComplete(
     const escalaCount = combos.filter(c => c.type === 'escala').length;
     return trioCount >= requiredTrios && escalaCount >= requiredEscalas;
 }
-
-// Re-export helpers for tests
-export { getValueRank, getSuit, getValueName, isStandard, isJoker };

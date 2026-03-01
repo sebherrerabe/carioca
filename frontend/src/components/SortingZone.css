@@ -1,62 +1,59 @@
-/* Sorting Zone — "Mesa de trabajo" */
+/* ─── Sorting Zone — natural "cards laid on table" feel ─── */
 .sorting-zone {
-    flex: 0 0 280px;
     display: flex;
     flex-direction: column;
-    background: rgba(0, 0, 0, 0.3);
-    border: 2px dashed rgba(255, 255, 255, 0.1);
-    border-radius: 12px;
-    padding: 0.5rem;
-    min-height: 100px;
-    max-height: 100%;
-    overflow-y: auto;
-    overflow-x: hidden;
-    transition: border-color 0.2s, background 0.2s;
+    min-height: 0;
+    padding: 0 0.5rem;
+    transition: background 0.2s;
+    width: 100%;
 }
 
 .sorting-zone.drop-active {
-    border-color: var(--color-primary-main);
-    background: rgba(99, 102, 241, 0.08);
+    background: rgba(99, 102, 241, 0.04);
+    border-radius: 12px;
 }
 
 .sorting-zone-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 0.25rem 0.25rem 0.4rem;
-    font-size: 0.75rem;
+    padding: 0 0.25rem 0.3rem;
+    font-size: 0.65rem;
     font-weight: 600;
-    color: rgba(255, 255, 255, 0.5);
+    color: rgba(255, 255, 255, 0.3);
     text-transform: uppercase;
     letter-spacing: 1.5px;
     flex-shrink: 0;
 }
 
 .sorting-zone-empty {
-    flex: 1;
     display: flex;
     align-items: center;
     justify-content: center;
-    color: rgba(255, 255, 255, 0.2);
-    font-size: 0.8rem;
+    color: rgba(255, 255, 255, 0.12);
+    font-size: 0.75rem;
     font-style: italic;
     text-align: center;
-    padding: 1rem;
+    padding: 0.5rem 1rem;
+    min-height: 50px;
 }
 
 .sorting-zone-cards {
     display: flex;
     flex-wrap: wrap;
-    gap: 2px;
-    align-items: flex-start;
+    align-items: flex-end;
+    justify-content: center;
     padding: 0.25rem 0;
-    min-height: 80px;
+    min-height: 0;
+    overflow: visible;
+    gap: 2px;
 }
 
 .sorting-zone-card-wrapper {
     position: relative;
     cursor: grab;
     transition: transform 0.15s ease;
+    flex-shrink: 0;
 }
 
 .sorting-zone-card-wrapper:active {
@@ -64,33 +61,32 @@
 }
 
 .sorting-zone-card-wrapper:hover {
-    transform: translateY(-4px);
+    transform: translateY(-8px);
     z-index: 10;
 }
 
-/* Combo Highlight Borders */
+/* ─── Combo Group Wrappers ─── */
 .combo-group-wrapper {
     display: flex;
     flex-direction: column;
+    align-items: center;
     position: relative;
-    margin-right: 6px;
-    margin-bottom: 4px;
+    margin: 0 8px;
+    flex-shrink: 0;
 }
 
 .combo-group-wrapper.trio {
-    background: rgba(16, 185, 129, 0.12);
-    border: 1.5px solid rgba(16, 185, 129, 0.5);
-    border-radius: 8px;
-    padding: 3px;
-    box-shadow: 0 0 8px rgba(16, 185, 129, 0.15);
+    background: rgba(16, 185, 129, 0.06);
+    border-bottom: 2px solid rgba(16, 185, 129, 0.4);
+    border-radius: 0 0 8px 8px;
+    padding: 0 4px 3px;
 }
 
 .combo-group-wrapper.escala {
-    background: rgba(99, 102, 241, 0.12);
-    border: 1.5px solid rgba(99, 102, 241, 0.5);
-    border-radius: 8px;
-    padding: 3px;
-    box-shadow: 0 0 8px rgba(99, 102, 241, 0.15);
+    background: rgba(99, 102, 241, 0.06);
+    border-bottom: 2px solid rgba(99, 102, 241, 0.4);
+    border-radius: 0 0 8px 8px;
+    padding: 0 4px 3px;
 }
 
 .combo-header-row {
@@ -98,43 +94,39 @@
     align-items: center;
     justify-content: center;
     gap: 4px;
-    position: absolute;
-    top: -12px;
-    left: 50%;
-    transform: translateX(-50%);
-    z-index: 5;
+    margin-bottom: 2px;
     white-space: nowrap;
 }
 
 .combo-cards-row {
     display: flex;
-    margin-top: 2px;
+    align-items: flex-end;
 }
 
 .combo-group-wrapper .combo-label {
-    font-size: 0.55rem;
+    font-size: 0.5rem;
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 1px;
-    padding: 2px 4px;
+    padding: 1px 5px;
     border-radius: 3px;
 }
 
 .combo-group-wrapper.trio .combo-label {
-    background: rgba(16, 185, 129, 0.9);
+    background: rgba(16, 185, 129, 0.8);
     color: white;
 }
 
 .combo-group-wrapper.escala .combo-label {
-    background: rgba(99, 102, 241, 0.9);
+    background: rgba(99, 102, 241, 0.8);
     color: white;
 }
 
 .unlink-btn {
-    background: rgba(255, 255, 255, 0.9);
-    border: 1px solid rgba(0, 0, 0, 0.2);
+    background: rgba(255, 255, 255, 0.8);
+    border: 1px solid rgba(0, 0, 0, 0.12);
     cursor: pointer;
-    font-size: 0.55rem;
+    font-size: 0.5rem;
     padding: 1px 3px;
     border-radius: 3px;
     display: flex;
@@ -157,7 +149,7 @@
     width: 16px;
     height: 16px;
     border-radius: 50%;
-    background: rgba(225, 29, 72, 0.9);
+    background: rgba(225, 29, 72, 0.85);
     border: none;
     color: white;
     font-size: 0.5rem;

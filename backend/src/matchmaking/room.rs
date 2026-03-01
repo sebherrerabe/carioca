@@ -238,6 +238,7 @@ impl Room {
             is_waiting_for_next_round: self.game_state.is_waiting_for_next_round,
             required_trios: self.game_state.current_round.get_requirements().0,
             required_escalas: self.game_state.current_round.get_requirements().1,
+            last_action: self.game_state.last_action.clone(),
         };
 
         Some((target_user_id.to_string(), msg))

@@ -2,6 +2,14 @@ use crate::engine::card::Card;
 use crate::engine::deck::Deck;
 use serde::{Deserialize, Serialize};
 
+/// Tracks the most recent action taken by any player, broadcast to all clients.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LastAction {
+    pub player_id: String,
+    pub action_type: String,
+    pub card: Option<Card>,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum RoundType {
     TwoTrios,          // 2 tríos (6 cartas)
@@ -81,6 +89,7 @@ pub struct GameState {
     pub discard_pile: Vec<Card>,
     pub is_game_over: bool,
     pub is_waiting_for_next_round: bool,
+    pub last_action: Option<LastAction>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -122,6 +131,7 @@ impl GameState {
             discard_pile: Vec::new(),
             is_game_over: false,
             is_waiting_for_next_round: false,
+            last_action: None,
         }
     }
 
@@ -129,6 +139,7 @@ impl GameState {
         self.deck = Deck::new();
         self.deck.shuffle();
         self.discard_pile.clear();
+        self.last_action = None;
 
         for player in &mut self.players {
             player.hand.clear();
@@ -171,8 +182,14 @@ impl GameState {
             return Err("You have already drawn a card this turn");
         }
 
+        let pid = player.id.clone();
         player.hand.push(card);
         player.has_drawn_this_turn = true;
+        self.last_action = Some(LastAction {
+            player_id: pid,
+            action_type: "drew_from_deck".to_string(),
+            card: None,
+        });
         Ok(())
     }
 
@@ -199,8 +216,14 @@ impl GameState {
         let card = self.discard_pile.pop().ok_or("Discard pile is empty")?;
 
         // Re-borrow mutably after the discard pile borrow is done
+        let pid = self.players[idx].id.clone();
         self.players[idx].hand.push(card);
         self.players[idx].has_drawn_this_turn = true;
+        self.last_action = Some(LastAction {
+            player_id: pid,
+            action_type: "drew_from_pozo".to_string(),
+            card: Some(card),
+        });
         Ok(())
     }
 
@@ -226,8 +249,14 @@ impl GameState {
 
         let card = player.hand.remove(card_index);
         let hand_is_empty = player.hand.is_empty();
+        let pid = player.id.clone();
 
         self.discard_pile.push(card);
+        self.last_action = Some(LastAction {
+            player_id: pid,
+            action_type: "discarded".to_string(),
+            card: Some(card),
+        });
 
         self.players[idx].turns_played += 1;
         self.players[idx].has_drawn_this_turn = false;
@@ -346,7 +375,13 @@ impl GameState {
         player.hand = original_hand_copy;
         player.has_dropped_hand = true;
         player.dropped_hand_this_turn = true;
+        let pid = player.id.clone();
         player.dropped_combinations = combinations;
+        self.last_action = Some(LastAction {
+            player_id: pid,
+            action_type: "bajó".to_string(),
+            card: None,
+        });
 
         Ok(())
     }
@@ -418,7 +453,13 @@ impl GameState {
             .ok_or("This card cannot be shed onto that combo")?;
 
         // Apply the shed: remove card from hand, insert into the target combo
+        let pid = self.players[current_idx].id.clone();
         self.players[current_idx].hand.remove(hand_card_index);
+        self.last_action = Some(LastAction {
+            player_id: pid,
+            action_type: "shed".to_string(),
+            card: Some(card),
+        });
 
         match position {
             crate::engine::combo_finder::ShedPosition::ExtendLeft => {

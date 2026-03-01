@@ -3,14 +3,16 @@
   --color-bg-base: #0f1115;
   --color-bg-surface: #1e212b;
   --color-bg-elevated: #282d38;
-  
-  --color-primary-main: #6366f1; /* Indigo */
+
+  --color-primary-main: #6366f1;
+  /* Indigo */
   --color-primary-hover: #4f46e5;
-  --color-accent-main: #ec4899; /* Pink */
-  
+  --color-accent-main: #ec4899;
+  /* Pink */
+
   --color-text-main: #f8fafc;
   --color-text-muted: #94a3b8;
-  
+
   --color-border: rgba(255, 255, 255, 0.08);
   --color-border-focus: rgba(99, 102, 241, 0.5);
 
@@ -34,6 +36,17 @@
   --radius-md: 0.5rem;
   --radius-lg: 1rem;
   --radius-xl: 1.5rem;
+
+  /* Card sizing tokens */
+  --card-w-lg: 80px;
+  --card-h-lg: 112px;
+  /* player hand */
+  --card-w-md: 60px;
+  --card-h-md: 84px;
+  /* table / sorting zone */
+  --card-w-sm: 38px;
+  --card-h-sm: 53px;
+  /* opponent backs */
 }
 
 * {

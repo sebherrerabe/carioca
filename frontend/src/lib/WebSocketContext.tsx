@@ -44,6 +44,11 @@ export interface GameState {
     is_waiting_for_next_round: boolean;
     required_trios: number;
     required_escalas: number;
+    last_action: {
+        player_id: string;
+        action_type: string;
+        card: CardData | null;
+    } | null;
 }
 
 type ServerMessage =

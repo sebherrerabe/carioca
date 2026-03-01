@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::engine::card::Card;
-use crate::engine::game::PlayerState;
+use crate::engine::game::{LastAction, PlayerState};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type")]
@@ -73,6 +73,7 @@ pub enum ServerMessage {
         // Structured round requirements for frontend combo validation
         required_trios: usize,
         required_escalas: usize,
+        last_action: Option<LastAction>,
     },
     RoundEnded {
         round_index: usize,

@@ -76,7 +76,7 @@ export const SortingZone = forwardRef<HTMLDivElement, SortingZoneProps>(({
         }
     };
 
-    const renderCard = (item: SortingCard, globalIdx: number) => (
+    const renderCard = (item: SortingCard, globalIdx: number, isInCombo: boolean) => (
         <div
             key={item.id}
             className="sorting-zone-card-wrapper"
@@ -84,8 +84,9 @@ export const SortingZone = forwardRef<HTMLDivElement, SortingZoneProps>(({
             onDragStart={(e) => handleInternalDragStart(globalIdx, e)}
             onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
             onDrop={(e) => handleInternalDrop(globalIdx, e)}
+            style={{ marginLeft: isInCombo && globalIdx > 0 ? '-24px' : undefined }}
         >
-            <Card card={item.card} isDraggable={false} style={{ width: 50, height: 70, fontSize: '0.65rem' }} />
+            <Card card={item.card} isDraggable={false} />
             <button
                 className="sorting-card-return-btn"
                 onClick={() => onReturnCard(item.id)}
@@ -125,12 +126,12 @@ export const SortingZone = forwardRef<HTMLDivElement, SortingZoneProps>(({
                                         </button>
                                     </div>
                                     <div className="combo-cards-row">
-                                        {group.cards.map((item, cardIdx) => renderCard(item, group.startIndex + cardIdx))}
+                                        {group.cards.map((item, cardIdx) => renderCard(item, group.startIndex + cardIdx, true))}
                                     </div>
                                 </div>
                             );
                         }
-                        return renderCard(group.cards[0], group.startIndex);
+                        return renderCard(group.cards[0], group.startIndex, false);
                     })}
                 </div>
             )}

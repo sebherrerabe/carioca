@@ -194,6 +194,13 @@ export default function Game() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [gameState?.my_hand, gameState?.players]);
 
+    // ─── Auto-dismiss Round End Modal ─────────────────────────
+    useEffect(() => {
+        if (gameState && !gameState.is_waiting_for_next_round && roundEndData) {
+            clearRoundEndData();
+        }
+    }, [gameState?.is_waiting_for_next_round, roundEndData, clearRoundEndData]);
+
 
     // ─── Bajar Button Handler ────
 
@@ -442,26 +449,38 @@ export default function Game() {
                                 </tr>
                             </thead>
                             <tbody>
-                                {[...roundEndData.player_scores].sort((a, b) => a.total_points - b.total_points).map(score => (
-                                    <tr key={score.id} className={score.id === userId ? 'my-score-row' : ''}>
-                                        <td>{getPlayerDisplayName(score.id)}</td>
-                                        <td className="round-points">+{score.round_points}</td>
-                                        <td className="total-points">{score.total_points}</td>
-                                    </tr>
-                                ))}
+                                {[...roundEndData.player_scores].sort((a, b) => a.total_points - b.total_points).map(score => {
+                                    const playerState = gameState.players.find(p => p.id === score.id);
+                                    const isReady = playerState?.is_ready_for_next_round;
+                                    return (
+                                        <tr key={score.id} className={score.id === userId ? 'my-score-row' : ''}>
+                                            <td>
+                                                {getPlayerDisplayName(score.id)}
+                                                {isReady && !roundEndData.is_game_over && <span style={{ marginLeft: '0.5rem' }} title="Ready">✅</span>}
+                                            </td>
+                                            <td className="round-points">+{score.round_points}</td>
+                                            <td className="total-points">{score.total_points}</td>
+                                        </tr>
+                                    );
+                                })}
                             </tbody>
                         </table>
 
                         <button
                             className="btn btn-primary btn-large continue-btn"
+                            disabled={me?.is_ready_for_next_round && !roundEndData.is_game_over}
                             onClick={() => {
-                                clearRoundEndData();
                                 if (roundEndData.is_game_over) {
+                                    clearRoundEndData();
                                     handleQuit();
+                                } else {
+                                    sendAction({ type: 'ReadyForNextRound', payload: null });
                                 }
                             }}
                         >
-                            {roundEndData.is_game_over ? 'Return to Lobby' : `Start Next Round`}
+                            {roundEndData.is_game_over
+                                ? 'Return to Lobby'
+                                : me?.is_ready_for_next_round ? 'Waiting for players...' : 'Start Next Round'}
                         </button>
                     </div>
                 </div>

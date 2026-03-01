@@ -12,6 +12,7 @@ pub enum ClientMessage {
     DropHand { payload: DropHandPayload },
     ShedCard { payload: ShedCardPayload },
     ReorderHand { payload: ReorderHandPayload },
+    ReadyForNextRound,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -68,6 +69,7 @@ pub enum ServerMessage {
         current_turn_index: usize,
         discard_pile_top: Option<Card>,
         is_game_over: bool,
+        is_waiting_for_next_round: bool,
         // Structured round requirements for frontend combo validation
         required_trios: usize,
         required_escalas: usize,
@@ -93,6 +95,7 @@ pub struct SanitizedPlayerState {
     pub turns_played: u32,
     pub has_drawn_this_turn: bool,
     pub dropped_hand_this_turn: bool,
+    pub is_ready_for_next_round: bool,
 }
 
 impl SanitizedPlayerState {
@@ -106,6 +109,7 @@ impl SanitizedPlayerState {
             turns_played: state.turns_played,
             has_drawn_this_turn: state.has_drawn_this_turn,
             dropped_hand_this_turn: state.dropped_hand_this_turn,
+            is_ready_for_next_round: state.is_ready_for_next_round,
         }
     }
 }

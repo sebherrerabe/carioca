@@ -80,6 +80,7 @@ pub struct GameState {
     pub deck: Deck,
     pub discard_pile: Vec<Card>,
     pub is_game_over: bool,
+    pub is_waiting_for_next_round: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -92,6 +93,7 @@ pub struct PlayerState {
     pub turns_played: u32, // How many full turns (draw+discard) this player has completed this round
     pub has_drawn_this_turn: bool,
     pub dropped_hand_this_turn: bool,
+    pub is_ready_for_next_round: bool,
 }
 
 impl GameState {
@@ -107,6 +109,7 @@ impl GameState {
                 turns_played: 0,
                 has_drawn_this_turn: false,
                 dropped_hand_this_turn: false,
+                is_ready_for_next_round: false,
             })
             .collect();
 
@@ -118,6 +121,7 @@ impl GameState {
             deck: Deck::new(),
             discard_pile: Vec::new(),
             is_game_over: false,
+            is_waiting_for_next_round: false,
         }
     }
 
@@ -133,6 +137,7 @@ impl GameState {
             player.turns_played = 0;
             player.has_drawn_this_turn = false;
             player.dropped_hand_this_turn = false;
+            player.is_ready_for_next_round = false;
             // Deal 12 cards to each player
             for _ in 0..12 {
                 if let Some(card) = self.deck.draw() {
@@ -156,6 +161,9 @@ impl GameState {
         if self.is_game_over {
             return Err("Game is over");
         }
+        if self.is_waiting_for_next_round {
+            return Err("Waiting for other players to be ready for the next round");
+        }
 
         let card = self.deck.draw().ok_or("Deck is empty")?;
         let player = self.current_player().ok_or("Invalid turn")?;
@@ -171,6 +179,9 @@ impl GameState {
     pub fn draw_from_discard(&mut self) -> Result<(), &'static str> {
         if self.is_game_over {
             return Err("Game is over");
+        }
+        if self.is_waiting_for_next_round {
+            return Err("Waiting for other players to be ready for the next round");
         }
 
         let idx = self.current_turn;
@@ -196,6 +207,9 @@ impl GameState {
     pub fn discard(&mut self, card_index: usize) -> Result<Option<RoundEndResult>, &'static str> {
         if self.is_game_over {
             return Err("Game is over");
+        }
+        if self.is_waiting_for_next_round {
+            return Err("Waiting for other players to be ready for the next round");
         }
 
         let idx = self.current_turn;
@@ -272,6 +286,9 @@ impl GameState {
     ) -> Result<(), &'static str> {
         if self.is_game_over {
             return Err("Game is over");
+        }
+        if self.is_waiting_for_next_round {
+            return Err("Waiting for other players to be ready for the next round");
         }
 
         let idx = self.current_turn;
@@ -352,6 +369,9 @@ impl GameState {
     ) -> Result<Option<RoundEndResult>, &'static str> {
         if self.is_game_over {
             return Err("Game is over");
+        }
+        if self.is_waiting_for_next_round {
+            return Err("Waiting for other players to be ready for the next round");
         }
 
         let current_idx = self.current_turn;
@@ -458,7 +478,12 @@ impl GameState {
             next_round_index = self.round_index;
             next_round_name = self.current_round.description().to_string();
             is_game_over = false;
-            self.start_round();
+
+            // Do not start round immediately. Wait for players to be ready.
+            self.is_waiting_for_next_round = true;
+            for player in &mut self.players {
+                player.is_ready_for_next_round = player.id.starts_with("bot_");
+            }
         } else {
             self.is_game_over = true;
             is_game_over = true;
@@ -475,6 +500,28 @@ impl GameState {
             next_round_name,
             is_game_over,
         }
+    }
+
+    pub fn mark_player_ready(&mut self, player_id: &str) -> Result<(), &'static str> {
+        if !self.is_waiting_for_next_round {
+            return Err("Game is not waiting for next round");
+        }
+
+        let player = self
+            .players
+            .iter_mut()
+            .find(|p| p.id == player_id)
+            .ok_or("Player not found")?;
+
+        player.is_ready_for_next_round = true;
+
+        let all_ready = self.players.iter().all(|p| p.is_ready_for_next_round);
+        if all_ready {
+            self.is_waiting_for_next_round = false;
+            self.start_round();
+        }
+
+        Ok(())
     }
 }
 

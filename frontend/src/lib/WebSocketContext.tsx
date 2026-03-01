@@ -14,6 +14,7 @@ interface PlayerState {
     turns_played: number;
     has_drawn_this_turn: boolean;
     dropped_hand_this_turn: boolean;
+    is_ready_for_next_round: boolean;
 }
 
 export interface PlayerScore {
@@ -40,6 +41,7 @@ export interface GameState {
     current_turn_index: number;
     discard_pile_top: CardData | null;
     is_game_over: boolean;
+    is_waiting_for_next_round: boolean;
     required_trios: number;
     required_escalas: number;
 }

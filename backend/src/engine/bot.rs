@@ -357,6 +357,7 @@ mod tests {
             turns_played,
             has_drawn_this_turn: false,
             dropped_hand_this_turn: false,
+            is_ready_for_next_round: false,
         }
     }
 

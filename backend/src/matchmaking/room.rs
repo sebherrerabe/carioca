@@ -179,6 +179,12 @@ impl Room {
                 }
                 None
             }
+            ClientMessage::ReadyForNextRound => {
+                if let Err(e) = self.game_state.mark_player_ready(&user_id) {
+                    self.send_error(&user_id, e).await;
+                }
+                None
+            }
         }
     }
 
@@ -229,6 +235,7 @@ impl Room {
             current_turn_index: self.game_state.current_turn,
             discard_pile_top: top_discard,
             is_game_over: self.game_state.is_game_over,
+            is_waiting_for_next_round: self.game_state.is_waiting_for_next_round,
             required_trios: self.game_state.current_round.get_requirements().0,
             required_escalas: self.game_state.current_round.get_requirements().1,
         };
